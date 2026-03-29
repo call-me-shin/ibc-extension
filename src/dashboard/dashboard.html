@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IBC Dashboard – 詳細バイアス分析</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
+
+    :root {
+      --bg:       #080810;
+      --surface:  #0f0f1a;
+      --surface2: #16162a;
+      --border:   rgba(255,255,255,0.06);
+      --accent:   #7c6af7;
+      --accent2:  #f76a8a;
+      --accent3:  #6af7c8;
+      --text:     #e0e0f0;
+      --ok:       #6af7a0;
+      --warn:     #f7c56a;
+      --danger:   #f76a6a;
+      --font-h:   'Space Mono', monospace;
+      --font-b:   'IBM Plex Sans JP', 'Noto Sans JP', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-b);
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 99;
+      background: rgba(8,8,16,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 9px;
+      display: grid; place-items: center;
+      font-family: var(--font-h);
+      font-size: 11px; font-weight: 700; color: #fff;
+    }
+    .brand-text { font-family: var(--font-h); font-size: 14px; letter-spacing: 2px; }
+    .brand-sub  { font-size: 10px; color: #6060a0; margin-top: 2px; letter-spacing: 1px; }
+
+    .topbar-right { display: flex; gap: 10px; align-items: center; }
+    .meta-chip {
+      padding: 4px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px; color: #6060a0;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: var(--font-h);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      cursor: pointer; border: none; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.8; }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 32px; }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px;
+      position: relative; overflow: hidden;
+    }
+    .kpi-card::after {
+      content: ''; position: absolute;
+      bottom: 0; left: 0; right: 0; height: 2px;
+      background: var(--kpi-color, var(--accent));
+    }
+    .kpi-label {
+      font-family: var(--font-h);
+      font-size: 8px; letter-spacing: 2px;
+      color: #6060a0; text-transform: uppercase; margin-bottom: 10px;
+    }
+    .kpi-value {
+      font-family: var(--font-h);
+      font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -1px;
+    }
+    .kpi-unit { font-size: 14px; color: #6060a0; }
+    .kpi-sub  { margin-top: 6px; font-size: 10px; color: #6060a0; }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px; margin-bottom: 28px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px;
+    }
+    .card-title {
+      font-family: var(--font-h);
+      font-size: 9px; letter-spacing: 2px;
+      color: #6060a0; text-transform: uppercase; margin-bottom: 16px;
+    }
+    .chart-wrap { position: relative; height: 240px; }
+
+    .wide-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px; margin-bottom: 28px;
+    }
+
+    .bar-list { display: flex; flex-direction: column; gap: 10px; }
+    .bar-item  { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 12px; }
+    .bar-label { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .bar-fill  { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .bar-value { font-family: var(--font-h); font-size: 11px; color: #6060a0; text-align: right; }
+
+    .timeline-wrap { position: relative; height: 160px; }
+
+    #loading {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; z-index: 999;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-family: var(--font-h); font-size: 12px; color: #6060a0; letter-spacing: 2px; }
+    #loading.hidden { display: none; }
+
+    @media (max-width: 800px) {
+      main { padding: 20px; }
+      .kpi-row   { grid-template-columns: 1fr 1fr; }
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">ANALYZING YOUR FEED...</div>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">IBC</div>
+    <div>
+      <div class="brand-text">INFORMATION BIAS CHECKER</div>
+      <div class="brand-sub">FILTER BUBBLE DASHBOARD</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="meta-chip" id="metaChip">読み込み中...</div>
+    <button class="btn btn-primary" id="btnReanalyze">↺ 再解析</button>
+  </div>
+</div>
+
+<main>
+  <div class="kpi-row">
+    <div class="kpi-card" style="--kpi-color: var(--accent)">
+      <div class="kpi-label">Bias Score</div>
+      <div class="kpi-value" id="kpiBias" style="color:var(--accent)">—</div>
+      <div class="kpi-unit">/100</div>
+      <div class="kpi-sub" id="kpiBiasLabel">—</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--accent3)">
+      <div class="kpi-label">Total Posts</div>
+      <div class="kpi-value" id="kpiTotal" style="color:var(--accent3)">—</div>
+      <div class="kpi-unit">件</div>
+      <div class="kpi-sub">直近7日間</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--accent2)">
+      <div class="kpi-label">Unique Authors</div>
+      <div class="kpi-value" id="kpiAuthors" style="color:var(--accent2)">—</div>
+      <div class="kpi-unit">人</div>
+      <div class="kpi-sub">ユニーク投稿者数</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--warn)">
+      <div class="kpi-label">Top Author Share</div>
+      <div class="kpi-value" id="kpiTopShare" style="color:var(--warn)">—</div>
+      <div class="kpi-unit">%</div>
+      <div class="kpi-sub" id="kpiTopName">最多投稿者</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="card-title">話題キーワード 占有率</div>
+      <div class="chart-wrap"><canvas id="kwDonut"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">ドミナント・フィギュア Top 10</div>
+      <div class="bar-list" id="authorBars"></div>
+    </div>
+  </div>
+
+  <div class="wide-card">
+    <div class="card-title">蓄積ツイート タイムライン（直近24時間・時間帯別）</div>
+    <div class="timeline-wrap"><canvas id="timelineChart"></canvas></div>
+  </div>
+</main>
+
+<!-- CSP 準拠：インラインスクリプトなし。外部 JS のみ参照 -->
+<script src="../lib/chart.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IBC – Information Bias Checker</title>
+  <style>
+    /* ── Design System ─────────────────────────────────────── */
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #12121a;
+      --surface2:  #1a1a26;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #7c6af7;
+      --accent2:   #f76a8a;
+      --accent3:   #6af7c8;
+      --text:      #e8e8f0;
+      --text-dim:  #7a7a9a;
+      --danger:    #f76a6a;
+      --warn:      #f7c56a;
+      --ok:        #6af7a0;
+      --radius:    12px;
+      --font-head: 'Space Mono', monospace;
+      --font-body: 'IBM Plex Sans JP', 'Noto Sans JP', sans-serif;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 400px;
+      min-height: 520px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, #0f0f1e 0%, #0a0a12 100%);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-head);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .logo-text {
+      font-family: var(--font-head);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .logo-sub {
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      margin-top: 1px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-icon {
+      width: 28px; height: 28px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-icon:hover { background: var(--surface); color: var(--text); }
+
+    /* ── Status Bar ─────────────────────────────────────────── */
+    .status-bar {
+      padding: 8px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+      margin-right: 5px;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Bias Score Card ────────────────────────────────────── */
+    .score-card {
+      margin: 16px 20px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .score-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--score-gradient, linear-gradient(90deg, var(--ok), var(--warn)));
+    }
+    .score-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .score-label {
+      font-family: var(--font-head);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .score-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+      border: 1px solid currentColor;
+    }
+    .score-display {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .score-number {
+      font-family: var(--font-head);
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -2px;
+      transition: color 0.5s;
+    }
+    .score-unit { color: var(--text-dim); font-size: 20px; margin-bottom: 8px; }
+    .score-bar-wrap {
+      margin-top: 14px;
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .score-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      background: linear-gradient(90deg, var(--ok), var(--warn), var(--danger));
+      background-size: 300% 100%;
+    }
+    .score-desc {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* ── Section ────────────────────────────────────────────── */
+    .section {
+      margin: 12px 20px 0;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-family: var(--font-head);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .section-count {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    /* ── Chart containers ──────────────────────────────────── */
+    .chart-wrap {
+      position: relative;
+      height: 160px;
+    }
+    canvas { display: block; }
+
+    /* ── Bar list ──────────────────────────────────────────── */
+    .bar-list { display: flex; flex-direction: column; gap: 6px; }
+    .bar-item {
+      display: grid;
+      grid-template-columns: 90px 1fr 28px;
+      align-items: center;
+      gap: 8px;
+    }
+    .bar-label {
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-track {
+      height: 5px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .bar-value {
+      font-family: var(--font-head);
+      font-size: 10px;
+      color: var(--text-dim);
+      text-align: right;
+    }
+
+    /* ── Empty State ────────────────────────────────────────── */
+    .empty-state {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--text-dim);
+    }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-title {
+      font-family: var(--font-head);
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .empty-desc { font-size: 11px; line-height: 1.6; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    .footer {
+      margin: 16px 20px 16px;
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: var(--font-head);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #5b4fe0);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { color: var(--text); background: var(--surface); }
+
+    /* ── Loading ────────────────────────────────────────────── */
+    #loading {
+      position: absolute; inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-family: var(--font-head);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+    #loading.hidden { display: none; }
+
+    /* ── Tab selector ──────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin: 12px 20px 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 6px;
+      border-radius: 6px;
+      font-family: var(--font-head);
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: var(--surface2);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+  </style>
+</head>
+<body>
+  <!-- Loading overlay -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">ANALYZING...</div>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-mark">IBC</div>
+      <div>
+        <div class="logo-text">BIAS CHECKER</div>
+        <div class="logo-sub">Information Bubble Detector</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btnRefresh" title="再解析">↺</button>
+      <button class="btn-icon" id="btnDash" title="詳細ダッシュボード">⊞</button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <span><span class="status-dot"></span>監視中 — X タイムライン</span>
+    <span id="statusMeta">読み込み中...</span>
+  </div>
+
+  <!-- Bias Score -->
+  <div class="score-card" id="scoreCard">
+    <div class="score-header">
+      <div>
+        <div class="score-label">Bias Level</div>
+      </div>
+      <div class="score-badge" id="scoreBadge">—</div>
+    </div>
+    <div class="score-display">
+      <div class="score-number" id="scoreNum">—</div>
+      <div class="score-unit">/100</div>
+    </div>
+    <div class="score-bar-wrap">
+      <div class="score-bar" id="scoreBar" style="width:0%"></div>
+    </div>
+    <div class="score-desc" id="scoreDesc">解析中...</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="keywords">キーワード</button>
+    <button class="tab" data-tab="authors">投稿者</button>
+  </div>
+
+  <!-- Tab: Keywords -->
+  <div class="tab-panel active section" id="tab-keywords">
+    <div class="section-head">
+      <span class="section-title">話題の占有率 Top 10</span>
+      <span class="section-count" id="kwCount">—</span>
+    </div>
+    <div class="card">
+      <div class="chart-wrap">
+        <canvas id="kwChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Authors -->
+  <div class="tab-panel section" id="tab-authors">
+    <div class="section-head">
+      <span class="section-title">ドミナント・フィギュア Top 10</span>
+      <span class="section-count" id="authCount">—</span>
+    </div>
+    <div class="card">
+      <div class="bar-list" id="authorBars"></div>
+    </div>
+  </div>
+
+  <!-- Empty state (hidden by default) -->
+  <div class="empty-state" id="emptyState" style="display:none">
+    <div class="empty-icon">📡</div>
+    <div class="empty-title">データがまだありません</div>
+    <div class="empty-desc">
+      X のタイムラインをスクロールすると<br>自動的にデータが蓄積されます。<br>
+      しばらくブラウジング後に再確認してください。
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="btn btn-secondary" id="btnClear">データ削除</button>
+    <button class="btn btn-primary" id="btnAnalyze">今すぐ解析</button>
+  </div>
+
+  <script src="../lib/chart.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
