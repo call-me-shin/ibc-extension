@@ -1,160 +1,100 @@
 # IBC – Information Bias Checker
 
-> Xのタイムラインにおけるフィルターバブル／エコーチェンバーを可視化する Chrome 拡張機能（MVP）
+> A Chrome extension that visualizes filter bubbles and echo chambers on your X (Twitter) "For You" timeline.
+> Xの「おすすめ」タイムラインにおけるフィルターバブル・エコーチェンバーを可視化するChrome拡張機能。
 
 ---
 
-## ディレクトリ構成
+## Overview / 概要
 
-```
-ibc-extension/
-├── manifest.json                  ← Manifest V3 設定
-├── icons/
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── src/
-    ├── content/
-    │   └── collector.js           ← X の DOM からデータを収集
-    ├── background/
-    │   └── service_worker.js      ← IndexedDB 管理・定期削除
-    ├── popup/
-    │   ├── popup.html             ← 拡張機能アイコン → ポップアップ UI
-    │   └── popup.js               ← NLP 解析 + Chart.js グラフ描画
-    ├── dashboard/
-    │   ├── dashboard.html         ← 詳細ダッシュボード（別タブ）
-    │   └── dashboard.js           ← ダッシュボード用 NLP 解析・グラフ描画ロジック
-    └── lib/
-        ├── db.js                  ← IDB スキーマ定義（参照用・直接は読み込まれない）
-        ├── nlp.js                 ← NLP ユーティリティ（参照用・直接は読み込まれない）
-        └── chart.min.js           ← Chart.js v4 バンドル（要ダウンロード）
-```
+IBC analyzes the tweets you scroll through on X's "For You" tab and calculates a **Bias Score** (0–100) based on keyword diversity and author diversity. The higher the score, the more your feed is locked in a filter bubble.
+
+IBCは、Xの「おすすめ」タブでスクロールしたツイートを分析し、キーワード多様性と投稿者多様性をもとに**バイアススコア**（0〜100）を算出します。スコアが高いほど、フィルターバブルに閉じ込められている状態を示します。
 
 ---
 
-## セットアップ手順
+## Features / 機能
 
-### 1. 外部ライブラリの配置
+- **For You only** — collects data exclusively from the `/home` "For You" tab
+  **おすすめタブのみ収集** — `/home` の「おすすめ」タブのデータだけを対象にします
+- **Bias Score** — Shannon entropy–based score from 0 (healthy) to 100 (extreme bubble)
+  **バイアススコア** — シャノンエントロピーによる0（健全）〜100（完全なバブル）のスコア
+- **Keyword chart** — doughnut chart showing top keyword share
+  **キーワード占有率** — 上位キーワードをドーナツグラフで表示
+- **Dominant figure** — bar chart of most frequent authors
+  **ドミナントフィギュア** — 最頻出の投稿者を棒グラフで表示
+- **Data clear** — delete all collected data instantly from the popup
+  **データクリア** — ポップアップからワンクリックで全データを削除
+- **Fully local** — no external server, no API calls
+  **完全ローカル処理** — 外部サーバーへの通信なし
+
+---
+
+## Installation / インストール
+
+### 1. Download Chart.js
 
 ```bash
-# Chart.js (v4系) をダウンロード
 curl -L https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js \
      -o src/lib/chart.min.js
-
-# ※ Dexie.js は現在未使用（raw IDB API で実装済み）
 ```
 
-### 2. アイコン画像の作成
+### 2. Load into Chrome / Chromeへの読み込み
 
-`icons/` 配下に 16×16, 48×48, 128×128px の PNG を用意してください。
-（開発時はプレースホルダーとして任意の PNG を配置して OK）
-
-### 3. Chrome への読み込み
-
-1. Chrome で `chrome://extensions/` を開く
-2. 右上「デベロッパーモード」をオン
-3. 「パッケージ化されていない拡張機能を読み込む」をクリック
-4. `ibc-extension/` フォルダを選択
+1. Open `chrome://extensions/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked** and select the `ibc-extension/` folder
 
 ---
 
-## アーキテクチャ解説
+## Usage / 使い方
 
-### データフロー
-
-```
-[X タイムライン DOM]
-       ↓ MutationObserver
-[collector.js]
-       ↓ IndexedDB.put()（重複排除）
-[ibc_db / tweets store]
-       ↓ Popup クリック
-[popup.js / dashboard.html]
-       ↓ NLP 解析
-[バイアススコア + グラフ]
-```
-
-### バイアススコア算出ロジック
-
-1. **キーワード多様性**（重み 60%）：全トークンのシャノンエントロピーを正規化
-2. **投稿者多様性**（重み 40%）：投稿者分布のシャノンエントロピーを正規化
-3. `BiasScore = (1 - 正規化エントロピー平均) × 100`
-   - 0 ≒ 多様で健全
-   - 100 ≒ 完全なフィルターバブル
+1. Open `x.com/home` and scroll the **For You** tab to collect tweets.
+   `x.com/home` を開き、**おすすめ**タブをスクロールしてツイートを収集します。
+2. Click the IBC extension icon to run the analysis and view your Bias Score.
+   IBCアイコンをクリックして解析を実行し、バイアススコアを確認します。
 
 ---
 
-## DOM 変更への対策（重要）
+## Privacy / プライバシー
 
-X は React SPA であり、頻繁に `data-testid` やクラス名を変更します。
-以下の設計で対応しています：
-
-### 多段フォールバックセレクタ（collector.js）
-
-```js
-const SELECTORS = {
-  tweetArticle: [
-    'article[data-testid="tweet"]',   // 現行（2024〜）
-    'article[role="article"]',         // フォールバック1
-    'div[data-testid="tweet"]',        // フォールバック2
-  ],
-  tweetText: [
-    '[data-testid="tweetText"]',
-    '[lang] > span',
-    '.tweet-text',                     // 旧仕様
-  ],
-  // ...
-};
-```
-
-### セレクタ修正時の手順
-
-1. Chrome DevTools で X を開き、ツイート要素を検査
-2. `collector.js` の `SELECTORS` オブジェクトの先頭に新しいセレクタを追加
-3. 拡張機能をリロード（`chrome://extensions/` → 更新ボタン）
-
-**ベストプラクティス**：
-- `data-testid` は比較的安定しているが、完全に信頼しない
-- テキストコンテンツベースの照合（`innerText` が空なら別セレクタへ）を使用
-- 定期的に DevTools でセレクタの動作確認を行う
+- All data is stored locally in IndexedDB — nothing leaves your device.
+  すべてのデータはIndexedDBにローカル保存され、端末外に出ることはありません。
+- No external communication of any kind.
+  外部への通信は一切行いません。
+- Collected data is automatically deleted after **7 days**.
+  収集データは**7日後**に自動削除されます。
+- You can delete all data manually from the popup at any time.
+  ポップアップからいつでも手動で全削除できます。
 
 ---
 
-## 現在の課題
+## Known Issues / 既知の課題
 
-### 1. ノイズの混入（NLP 精度）
-
-簡易的な正規表現ベースの形態素解析のため、助詞・助動詞・記号・URL断片などの無意味なトークンが分析に混入することがある。
-v0.3.0 ではストップワードの大幅拡充と品詞フィルタ強化により改善済みだが、根本的な解決には TinySegmenter 等の形態素解析ライブラリの導入が必要。
-
-### 2. スコアと肌感の乖離
-
-現在のバイアススコアは「語彙・投稿者の分散」のみを測定している。
-そのため、特定のジャンル（例：政治批判）に偏っていても単語の種類が多ければ「多様」と誤判定されるケースがある。
-ジャンル・文脈・センチメントの判定には AI（LLM）による意味理解が必要であり、これは現在のローカル処理の制約を超える課題。
+1. **NLP accuracy** — regex-based tokenization causes noise (TinySegmenter not yet integrated)
+   **NLP精度** — 正規表現ベースのトークン化によりノイズが混入することがある（TinySegmenter未導入）
+2. **Score gap** — only vocabulary/author diversity is measured; genre-level judgment requires AI
+   **スコアの乖離** — 語彙・投稿者の分散のみ測定しており、ジャンル判定にはAIが必要
+3. **DOM dependency** — X may change its DOM structure, requiring `SELECTORS` updates in `collector.js`
+   **DOM依存** — XのDOM構造変更により`collector.js`のセレクタ更新が必要になる場合がある
 
 ---
 
-## 今後の拡張案（Post-MVP）
+## Roadmap / 今後の予定
 
-| 優先度 | 機能 | 技術・手法 |
-|--------|------|-----------|
-| 🔴 高 | TinySegmenter 導入 | 正確な日本語分かち書き・品詞フィルタ |
-| 🔴 高 | AIジャンル分類 | Chrome built-in AI API（Gemini Nano）または軽量ローカルLLM |
-| 🟡 中 | タイムライン上バイアス表示 | Content Script によるオーバーレイ UI |
-| 🟡 中 | バイアストレンドグラフ | 時系列での偏り推移・週次レポート |
-| 🟡 中 | CSV/JSON エクスポート | Blob API + `a[download]` |
-| 🟢 低 | 他プラットフォーム対応 | YouTube / Reddit 等 |
-
-> **AIジャンル分類について**：Chrome 130+ では `window.ai`（Gemini Nano）が
-> 一部ユーザーに提供開始されている。これを使えば外部サーバー不要・完全ローカルで
-> ジャンル判定が可能になり、スコア精度の大幅向上が期待できる。
+- Integrate **TinySegmenter** for accurate Japanese tokenization
+  正確な日本語分かち書きのための**TinySegmenter**導入
+- **Genre classification** via Chrome built-in AI (Gemini Nano)
+  Chrome built-in AI（Gemini Nano）による**ジャンル分類**
+- **Bias overlay** on the timeline (content script UI)
+  タイムライン上への**バイアスオーバーレイ**表示
+- **CSV / JSON export**
 
 ---
 
-## プライバシーポリシー（MVP 向け）
+## Tech Stack / 技術スタック
 
-- **完全ローカル処理**：取得データは端末内の IndexedDB にのみ保存
-- **外部通信なし**：X API・外部サーバーへの通信は一切行わない
-- **自動削除**：7日経過したデータは自動的に削除される
-- **手動削除**：ポップアップの「データ削除」ボタンで即座に全削除可能
+- Chrome Extension Manifest V3
+- IndexedDB (raw IDB API, no Dexie.js)
+- Chart.js v4
+- Vanilla JS — no build tools, no frameworks
