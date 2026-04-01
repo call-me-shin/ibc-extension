@@ -28,6 +28,7 @@
         "https://twitter.com/*"
       ],
       "js": [
+        "src/lib/tinysegmenter.min.js",
         "src/content/collector.js"
       ],
       "run_at": "document_idle"

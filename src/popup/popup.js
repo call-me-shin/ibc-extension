@@ -112,6 +112,8 @@ const EN_STOP = new Set([
   'via','re','amp','rt','cc','vs','etc',
 ]);
 
+const segmenter = new TinySegmenter();
+
 function tokenize(text) {
   const cleaned = text
     .replace(/https?:\/\/\S+/g, '')
@@ -121,11 +123,11 @@ function tokenize(text) {
 
   const tokens = [];
 
-  const jpMatches = cleaned.match(/[\u4E00-\u9FFF\u30A0-\u30FF][\u3040-\u9FFF\uF900-\uFAFF]{0,9}/g) || [];
-  for (const w of jpMatches) {
-    if (/^[\u3040-\u309F]+$/.test(w) && w.length < 3) continue;
-    if (/^[\u30A0-\u30FF]$/.test(w)) continue;
-    tokens.push(w);
+  const jpText = cleaned.replace(/[a-zA-Z0-9]/g, ' ');
+  const jpTokens = segmenter.segment(jpText);
+  for (const w of jpTokens) {
+    const trimmed = w.trim();
+    if (trimmed.length >= 2) tokens.push(trimmed);
   }
 
   const enMatches = cleaned.match(/[a-zA-Z]{3,}/g) || [];
