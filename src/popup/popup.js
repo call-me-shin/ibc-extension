@@ -79,27 +79,73 @@ async function clearAllTweets() {
 
 // ── NLP ─────────────────────────────────────────────────────────────────────
 const JP_STOP = new Set([
-  'の','に','は','を','た','が','で','て','と','し','れ','さ','ある','いる','も',
-  'する','から','な','こと','として','い','や','れる','など','なり','って','ない',
-  'この','ため','その','あの','これ','それ','あれ','よう','という','か','ね','よ',
-  'ー','・','…','「','」','（','）','、','。','！','？','https','http','com','jp','rt','amp','www',
+  'の','に','は','を','が','で','て','と','や','も','か','な','へ','より','から','まで','にて',
+  'において','については','について','による','によって','として','にとって','をめぐって',
+  'た','だ','です','ます','ない','ある','いる','する','れる','られる','させる','せる',
+  'てる','でる','てい','でい','ており','でいる','してい','している',
+  'し','れ','さ','も','こと','として','い','や','れる','など','なり','って','ない',
+  'この','ため','その','あの','これ','それ','あれ','よう','という','か','ね','よ','わ',
+  'でも','しかし','ただ','また','さらに','そして','なお','ところ','あと','まあ','もう',
+  'やはり','やっぱり','ちょっと','とても','すごく','かなり','なんか','なんて','けど',
+  'けれど','だから','なので','ので','のに','って','かな','かも','らしい','みたい',
+  'ほど','くらい','ぐらい','だけ','しか','ばかり','など','なんて','ってか',
+  'いう','いか','いて','いた','おり','おる','あり','あっ','なっ','なく','なる',
+  'あと','まず','特に','実は','実際','一応','一番','最も','全て','全部',
+  'もの','こと','ところ','わけ','はず','つもり','ため','通り','感じ','意味','必要',
+  'ん','て','で','に','は','を','が','の','と','も','や','か','へ','より',
+  'ー','・','…','「','」','（','）','、','。','！','？','〜','※','→','←',
+  'https','http','com','jp','rt','amp','www','co','pic','twitter','status',
 ]);
 const EN_STOP = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from',
   'this','that','is','are','was','were','be','been','have','has','had','do','does','did',
-  'will','would','could','should','it','i','you','he','she','we','they','not','no','so',
-  'if','as','up','out','just','also','get','all','more','now','new','like',
+  'will','would','could','should','may','might','can','shall','must','need',
+  'it','i','you','he','she','we','they','my','your','his','her','our','their','its',
+  'me','him','us','them','who','what','which','where','when','how','why',
+  'not','no','nor','so','if','as','up','out','about','into','than','then','there',
+  'just','also','like','get','got','all','more','now','new','good','very',
+  'know','think','make','say','see','look','want','use','find','give','tell','work',
+  'really','actually','basically','literally','definitely','absolutely',
+  'one','two','three','first','last','next','same','other','many','much','some','any',
+  'here','still','even','back','well','way','day','time','year','people',
+  'im','ive','dont','cant','wont','isnt','arent','wasnt','didnt','havent',
+  'via','re','amp','rt','cc','vs','etc',
 ]);
 
 function tokenize(text) {
-  const jp = text.match(/[\u3000-\u9FFF\uF900-\uFAFF]{2,8}/g) || [];
-  const en = (text.match(/[a-zA-Z][a-zA-Z'-]{2,}/g) || []).map(t => t.toLowerCase());
-  const ht = text.match(/#[\w\u3040-\u9FFF]+/g) || [];
-  return [...jp, ...en, ...ht];
+  const cleaned = text
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/@\w+/g, '')
+    .replace(/pic\.twitter\S*/g, '')
+    .trim();
+
+  const tokens = [];
+
+  const jpMatches = cleaned.match(/[\u4E00-\u9FFF\u30A0-\u30FF][\u3040-\u9FFF\uF900-\uFAFF]{0,9}/g) || [];
+  for (const w of jpMatches) {
+    if (/^[\u3040-\u309F]+$/.test(w) && w.length < 3) continue;
+    if (/^[\u30A0-\u30FF]$/.test(w)) continue;
+    tokens.push(w);
+  }
+
+  const enMatches = cleaned.match(/[a-zA-Z]{3,}/g) || [];
+  tokens.push(...enMatches.map(w => w.toLowerCase()));
+
+  const htMatches = text.match(/#[\w\u3040-\u9FFF]{2,}/g) || [];
+  tokens.push(...htMatches);
+
+  return tokens;
 }
 
 function removeStop(tokens) {
-  return tokens.filter(t => !JP_STOP.has(t) && !EN_STOP.has(t));
+  return tokens.filter(t => {
+    if (JP_STOP.has(t)) return false;
+    if (EN_STOP.has(t)) return false;
+    if (/^\d+$/.test(t)) return false;
+    if (/^[a-z]{1,2}$/.test(t)) return false;
+    if (/^[^\w\u3040-\u9FFF]+$/.test(t)) return false;
+    return true;
+  });
 }
 
 function freqMap(arr) {

@@ -2,63 +2,99 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 軽量 日本語 NLP ユーティリティ
 //
-// TinySegmenter を使った形態素解析（CDN 不要・バンドル済み前提）がベスト
-// ですが、ここでは外部ライブラリ不要で動く「正規表現ベースの簡易実装」を
-// 提供します。日本語・英語混在テキストに対応。
+// 外部ライブラリ不要で動く正規表現ベースの NLP 実装（参照用モジュール）。
+// 実際の処理は popup.js / dashboard.js にインライン実装されています。
+// 日本語・英語混在テキストに対応。URL・メンションの事前除去、
+// ひらがな短語・数字・記号のノイズフィルタリングを含む。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 日本語ストップワード（助詞・助動詞・記号など） */
-const JP_STOPWORDS = new Set([
-  'の','に','は','を','た','が','で','て','と','し','れ','さ','ある','いる','も',
-  'する','から','な','こと','として','い','や','れる','など','なり','って','ない',
-  'この','ため','その','あの','これ','それ','あれ','この','よう','という','か',
-  'で','ね','よ','わ','ー','・','…','「','」','（','）','、','。','！','？',
-  'https','http','com','www','co','jp','rt', 'amp',
+const JP_STOP = new Set([
+  'の','に','は','を','が','で','て','と','や','も','か','な','へ','より','から','まで','にて',
+  'において','については','について','による','によって','として','にとって','をめぐって',
+  'た','だ','です','ます','ない','ある','いる','する','れる','られる','させる','せる',
+  'てる','でる','てい','でい','ており','でいる','してい','している',
+  'し','れ','さ','も','こと','として','い','や','れる','など','なり','って','ない',
+  'この','ため','その','あの','これ','それ','あれ','よう','という','か','ね','よ','わ',
+  'でも','しかし','ただ','また','さらに','そして','なお','ところ','あと','まあ','もう',
+  'やはり','やっぱり','ちょっと','とても','すごく','かなり','なんか','なんて','けど',
+  'けれど','だから','なので','ので','のに','って','かな','かも','らしい','みたい',
+  'ほど','くらい','ぐらい','だけ','しか','ばかり','など','なんて','ってか',
+  'いう','いか','いて','いた','おり','おる','あり','あっ','なっ','なく','なる',
+  'あと','まず','特に','実は','実際','一応','一番','最も','全て','全部',
+  'もの','こと','ところ','わけ','はず','つもり','ため','通り','感じ','意味','必要',
+  'ん','て','で','に','は','を','が','の','と','も','や','か','へ','より',
+  'ー','・','…','「','」','（','）','、','。','！','？','〜','※','→','←',
+  'https','http','com','jp','rt','amp','www','co','pic','twitter','status',
 ]);
 
 /** 英語ストップワード */
-const EN_STOPWORDS = new Set([
-  'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
-  'from','this','that','is','are','was','were','be','been','have','has','had',
-  'do','does','did','will','would','could','should','may','might','can','it',
-  'i','you','he','she','we','they','my','your','his','her','our','their',
-  'not','no','so','if','as','up','out','about','into','than','then','there',
-  'just','also','like','get','got','all','more','than','now','new',
+const EN_STOP = new Set([
+  'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from',
+  'this','that','is','are','was','were','be','been','have','has','had','do','does','did',
+  'will','would','could','should','may','might','can','shall','must','need',
+  'it','i','you','he','she','we','they','my','your','his','her','our','their','its',
+  'me','him','us','them','who','what','which','where','when','how','why',
+  'not','no','nor','so','if','as','up','out','about','into','than','then','there',
+  'just','also','like','get','got','all','more','now','new','good','very',
+  'know','think','make','say','see','look','want','use','find','give','tell','work',
+  'really','actually','basically','literally','definitely','absolutely',
+  'one','two','three','first','last','next','same','other','many','much','some','any',
+  'here','still','even','back','well','way','day','time','year','people',
+  'im','ive','dont','cant','wont','isnt','arent','wasnt','didnt','havent',
+  'via','re','amp','rt','cc','vs','etc',
 ]);
 
 /**
  * テキストをトークン（単語）に分割する。
- * 日本語は2〜8文字のカタカナ・漢字ブロックを抽出、
- * 英語は通常の空白分割。
+ * - URL・@メンションを事前除去
+ * - 日本語：漢字始まり or カタカナ連続（2〜10文字、ひらがなのみ短語は除外）
+ * - 英語：3文字以上のアルファベットのみ
+ * - ハッシュタグ：# 付き2文字以上
  *
  * @param {string} text
  * @returns {string[]}
  */
 export function tokenize(text) {
+  const cleaned = text
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/@\w+/g, '')
+    .replace(/pic\.twitter\S*/g, '')
+    .trim();
+
   const tokens = [];
 
-  // 日本語トークン（漢字・カタカナ・ひらがな連続）
-  const jpMatches = text.match(/[\u3000-\u9FFF\uF900-\uFAFF]{2,8}/g) || [];
-  tokens.push(...jpMatches);
+  const jpMatches = cleaned.match(/[\u4E00-\u9FFF\u30A0-\u30FF][\u3040-\u9FFF\uF900-\uFAFF]{0,9}/g) || [];
+  for (const w of jpMatches) {
+    if (/^[\u3040-\u309F]+$/.test(w) && w.length < 3) continue;
+    if (/^[\u30A0-\u30FF]$/.test(w)) continue;
+    tokens.push(w);
+  }
 
-  // 英語トークン
-  const enMatches = text.match(/[a-zA-Z][a-zA-Z'-]{2,}/g) || [];
-  tokens.push(...enMatches.map(t => t.toLowerCase()));
+  const enMatches = cleaned.match(/[a-zA-Z]{3,}/g) || [];
+  tokens.push(...enMatches.map(w => w.toLowerCase()));
 
-  // Twitter固有: #ハッシュタグ & @メンション
-  const htMatches = text.match(/#[\w\u3040-\u9FFF]+/g) || [];
+  const htMatches = text.match(/#[\w\u3040-\u9FFF]{2,}/g) || [];
   tokens.push(...htMatches);
 
   return tokens;
 }
 
 /**
- * ストップワードを除去。
+ * ストップワード除去 + 追加ノイズフィルタ。
+ * 数字のみ・1〜2文字英字・記号のみのトークンも除去する。
  * @param {string[]} tokens
  * @returns {string[]}
  */
 export function removeStopwords(tokens) {
-  return tokens.filter(t => !JP_STOPWORDS.has(t) && !EN_STOPWORDS.has(t));
+  return tokens.filter(t => {
+    if (JP_STOP.has(t)) return false;
+    if (EN_STOP.has(t)) return false;
+    if (/^\d+$/.test(t)) return false;
+    if (/^[a-z]{1,2}$/.test(t)) return false;
+    if (/^[^\w\u3040-\u9FFF]+$/.test(t)) return false;
+    return true;
+  });
 }
 
 /**
