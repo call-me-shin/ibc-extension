@@ -6,29 +6,44 @@
 
 'use strict';
 
-// ── X タブへのメッセージ送信 ─────────────────────────────────────────────────
+// ── X タブを探す ─────────────────────────────────────────────────────────────
+// ダッシュボードは別タブで開くため currentWindow: true は使わず全タブから検索
+// 優先度: /home タブ → x.com の任意タブ
 function getXTab() {
   return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const active = tabs.find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
-      if (active) { resolve(active); return; }
-      chrome.tabs.query({}, (allTabs) => {
-        const found = allTabs.find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
-        resolve(found || null);
-      });
+    chrome.tabs.query({}, (allTabs) => {
+      const homeTab = allTabs.find(t => t.url && t.url.match(/https?:\/\/(x|twitter)\.com\/home/));
+      if (homeTab) { resolve(homeTab); return; }
+      const found = allTabs.find(t => t.url && t.url.match(/https?:\/\/(x|twitter)\.com/));
+      resolve(found || null);
+    });
+  });
+}
+
+// ── X タブへメッセージ送信 ───────────────────────────────────────────────────
+function sendToXTab(message) {
+  return new Promise(async (resolve) => {
+    const tab = await getXTab();
+
+    if (!tab) {
+      resolve({ success: false, reason: 'NO_TAB' });
+      return;
+    }
+
+    chrome.tabs.sendMessage(tab.id, message, (res) => {
+      if (chrome.runtime.lastError) {
+        resolve({ success: false, reason: 'NOT_READY', error: chrome.runtime.lastError.message });
+        return;
+      }
+      resolve(res || { success: false, reason: 'NO_RESPONSE' });
     });
   });
 }
 
 async function getRecentTweets() {
-  const tab = await getXTab();
-  if (!tab) return [];
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tab.id, { type: 'GET_TWEETS' }, (res) => {
-      if (chrome.runtime.lastError || !res) { resolve([]); return; }
-      resolve(res.tweets || []);
-    });
-  });
+  const res = await sendToXTab({ type: 'GET_TWEETS' });
+  if (!res.success) return [];
+  return res.tweets || [];
 }
 
 // ── NLP ─────────────────────────────────────────────────────────────────────
@@ -144,7 +159,7 @@ async function runAnalysis() {
     return;
   }
 
-  const allTokens = tweets.flatMap(t => tokenize(t.text));
+  const allTokens = tweets.flatMap(t => removeStop(tokenize(t.text)));
   const kwFreq    = freqMap(allTokens);
   const authFreq  = freqMap(tweets.map(t => t.author || '不明'));
   const topKw     = topN(kwFreq, 10);
