@@ -161,6 +161,50 @@ const LEVELS   = [
 
 let charts = {};
 
+// ── 著者バー描画 ─────────────────────────────────────────────────────────────
+function renderAuthorBars(topAuth, totalTweets) {
+  const wrap = document.getElementById('authorBars');
+  if (!topAuth.length) {
+    wrap.innerHTML = '<div style="color:var(--text-dim);font-size:11px;text-align:center;padding:16px">データなし</div>';
+    return;
+  }
+  const max = topAuth[0].count;
+  const CUD_PALETTE = [
+    '#4477AA', // 青
+    '#EE6677', // 赤
+    '#228833', // 緑
+    '#CCBB44', // 黄
+    '#66CCEE', // 水色
+    '#AA3377', // 紫
+    '#EE7733', // オレンジ
+    '#009988', // 青緑
+  ];
+
+  wrap.innerHTML = topAuth.map(({ author, count, avatar }, i) => {
+    const pct    = Math.round(count / totalTweets * 100);
+    const color  = CUD_PALETTE[i % CUD_PALETTE.length];
+    const handle = author.startsWith('@') ? author.slice(1) : author;
+    const link   = `https://x.com/${handle}`;
+    const avatarHtml = avatar
+      ? `<img src="${avatar}" style="width:20px;height:20px;border-radius:50%;margin-right:6px;vertical-align:middle;" />`
+      : `<span style="width:20px;height:20px;border-radius:50%;background:${color};display:inline-block;margin-right:6px;vertical-align:middle;font-size:9px;line-height:20px;text-align:center;">${handle[0]?.toUpperCase() || '?'}</span>`;
+
+    return `
+      <div class="bar-item">
+        <div class="bar-label">
+          ${avatarHtml}
+          <a href="${link}" target="_blank"
+             style="color:var(--text);text-decoration:none;"
+             title="${author}">${author}</a>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${(count/max*100).toFixed(1)}%;background:${color}"></div>
+        </div>
+        <div class="bar-value" style="color:${color}">${count}回 (${pct}%)</div>
+      </div>`;
+  }).join('');
+}
+
 // ── メイン解析 ───────────────────────────────────────────────────────────────
 async function runAnalysis() {
   document.getElementById('loading').classList.remove('hidden');
@@ -175,16 +219,31 @@ async function runAnalysis() {
 
   const allTokens = tweets.flatMap(t => removeStop(tokenize(t.text)));
   const kwFreq    = freqMap(allTokens);
-  const authFreq  = freqMap(tweets.map(t => t.author || '不明'));
   const topKw     = topN(kwFreq, 10);
-  const topAuth   = topN(authFreq, 10);
+
+  // 投稿者ごとの出現回数とアバターURLを集計
+  const authMap = new Map();
+  for (const t of tweets) {
+    const a = t.author || '不明';
+    if (!authMap.has(a)) {
+      authMap.set(a, { count: 0, avatar: t.avatar || '' });
+    }
+    authMap.get(a).count++;
+  }
+  const topAuth = [...authMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
+
+  // entropy 用に authFreq も作成（スコア計算で使用）
+  const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
   const kwEnt   = entropy(kwFreq,   allTokens.length || 1);
   const authEnt = entropy(authFreq, tweets.length);
   const score   = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
   const level   = LEVELS.find(l => score < l.max) || LEVELS[4];
   const topA    = topAuth[0];
-  const share   = topA ? Math.round(topA[1] / tweets.length * 100) : 0;
+  const share   = topA ? Math.round(topA.count / tweets.length * 100) : 0;
 
   // KPI 更新
   document.getElementById('kpiBias').textContent      = score;
@@ -193,7 +252,7 @@ async function runAnalysis() {
   document.getElementById('kpiTotal').textContent     = tweets.length;
   document.getElementById('kpiAuthors').textContent   = authFreq.size;
   document.getElementById('kpiTopShare').textContent  = share;
-  document.getElementById('kpiTopName').textContent   = topA ? topA[0] : '—';
+  document.getElementById('kpiTopName').textContent   = topA ? topA.author : '—';
 
   const oldest = Math.min(...tweets.map(t => t.savedAt));
   const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
@@ -218,13 +277,7 @@ async function runAnalysis() {
   });
 
   // 著者バー
-  const maxCount = topAuth[0] ? topAuth[0][1] : 1;
-  document.getElementById('authorBars').innerHTML = topAuth.map(([a, c], i) => `
-    <div class="bar-item">
-      <div class="bar-label" title="${a}">${a}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(c / maxCount * 100).toFixed(1)}%;background:${PALETTE[i % PALETTE.length]}"></div></div>
-      <div class="bar-value">${c}</div>
-    </div>`).join('');
+  renderAuthorBars(topAuth, tweets.length);
 
   // タイムラインチャート（直近24時間・時間帯別）
   const now     = Date.now();

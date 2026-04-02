@@ -139,6 +139,10 @@
       '[data-testid="User-Name"] a[href^="/"]',
       'a[tabindex="-1"][href^="/"]',
     ],
+    authorAvatar: [
+      '[data-testid^="UserAvatar-Container"] img',
+      'a[role="link"] img[src*="profile_images"]',
+    ],
   };
 
   function querySelector(root, selectorList) {
@@ -156,16 +160,19 @@
     const nameEl   = querySelector(article, SELECTORS.authorName);
     const handleEl = querySelector(article, SELECTORS.authorHandle);
 
+    const avatarEl = querySelector(article, SELECTORS.authorAvatar);
+
     const text   = textEl   ? textEl.innerText.trim()                : '';
     const name   = nameEl   ? nameEl.innerText.trim()                : '';
     const handle = handleEl ? (handleEl.href || '').split('/').pop() : '';
+    const avatar = avatarEl ? avatarEl.src : '';
 
     if (!text || text.length < 5) return null;
 
     const author = handle ? `@${handle}` : (name || '不明');
     const id     = simpleHash(author + text.slice(0, 100));
 
-    return { id, author, text, savedAt: Date.now() };
+    return { id, author, text, avatar, savedAt: Date.now() };
   }
 
   // ── バッチキュー ─────────────────────────────────────────────────────────────
@@ -195,6 +202,43 @@
     }
   }
 
+  // 保存済みツイートのアバターURLを後から補完する
+  async function updateAvatars() {
+    const articles = document.querySelectorAll('article[data-testid="tweet"]');
+    const avatarUpdates = new Map();
+
+    for (const article of articles) {
+      const handleEl = querySelector(article, SELECTORS.authorHandle);
+      const avatarEl = querySelector(article, SELECTORS.authorAvatar);
+      if (!handleEl || !avatarEl || !avatarEl.src) continue;
+
+      const handle = '@' + (handleEl.href || '').split('/').pop();
+      if (handle && avatarEl.src && !avatarEl.src.includes('default_profile')) {
+        avatarUpdates.set(handle, avatarEl.src);
+      }
+    }
+
+    if (!avatarUpdates.size) return;
+
+    const db = await openDB();
+    const tx = db.transaction(STORE_TWEETS, 'readwrite');
+    const store = tx.objectStore(STORE_TWEETS);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const tweets = req.result;
+      let updated = 0;
+      for (const tweet of tweets) {
+        if (!tweet.avatar && avatarUpdates.has(tweet.author)) {
+          tweet.avatar = avatarUpdates.get(tweet.author);
+          store.put(tweet);
+          updated++;
+        }
+      }
+      if (updated > 0) console.log(`[IBC] Updated ${updated} avatars.`);
+    };
+  }
+
   // ── スキャン ─────────────────────────────────────────────────────────────────
   function scanVisible() {
     if (!shouldCollect()) return;
@@ -208,6 +252,8 @@
       }
       break;
     }
+    // 画像の遅延読み込みを考慮して1秒後にアバターを補完
+    setTimeout(updateAvatars, 1000);
   }
 
   // ── MutationObserver ─────────────────────────────────────────────────────────

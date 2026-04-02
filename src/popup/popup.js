@@ -186,8 +186,22 @@ function analyze(tweets) {
   const allTokens = tweets.flatMap(t => removeStop(tokenize(t.text)));
   const kwFreq    = freqMap(allTokens);
   const topKw     = topN(kwFreq, 10);
-  const authFreq  = freqMap(tweets.map(t => t.author || '不明'));
-  const topAuth   = topN(authFreq, 10);
+  // 投稿者ごとの出現回数とアバターURLを集計
+  const authMap = new Map();
+  for (const t of tweets) {
+    const a = t.author || '不明';
+    if (!authMap.has(a)) {
+      authMap.set(a, { count: 0, avatar: t.avatar || '' });
+    }
+    authMap.get(a).count++;
+  }
+  const topAuth = [...authMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
+
+  // shannonEntropy 用に authFreq も作成（スコア計算で使用）
+  const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
   const kwEnt     = shannonEntropy(kwFreq,  allTokens.length || 1);
   const authEnt   = shannonEntropy(authFreq, tweets.length);
   const score     = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
@@ -227,21 +241,47 @@ function renderKeywordChart(topKw) {
   });
 }
 
-function renderAuthorBars(topAuth) {
+function renderAuthorBars(topAuth, totalTweets) {
   const wrap = document.getElementById('authorBars');
   if (!topAuth.length) {
     wrap.innerHTML = '<div style="color:var(--text-dim);font-size:11px;text-align:center;padding:16px">データなし</div>';
     return;
   }
-  const max = topAuth[0][1];
-  wrap.innerHTML = topAuth.map(([author, count], i) => `
-    <div class="bar-item">
-      <div class="bar-label" title="${author}">${author}</div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${(count / max * 100).toFixed(1)}%;background:${PALETTE[i % PALETTE.length]}"></div>
-      </div>
-      <div class="bar-value">${count}</div>
-    </div>`).join('');
+  const max = topAuth[0].count;
+  const CUD_PALETTE = [
+    '#4477AA', // 青
+    '#EE6677', // 赤
+    '#228833', // 緑
+    '#CCBB44', // 黄
+    '#66CCEE', // 水色
+    '#AA3377', // 紫
+    '#EE7733', // オレンジ
+    '#009988', // 青緑
+  ];
+
+  wrap.innerHTML = topAuth.map(({ author, count, avatar }, i) => {
+    const pct    = Math.round(count / totalTweets * 100);
+    const color  = CUD_PALETTE[i % CUD_PALETTE.length];
+    const handle = author.startsWith('@') ? author.slice(1) : author;
+    const link   = `https://x.com/${handle}`;
+    const avatarHtml = avatar
+      ? `<img src="${avatar}" style="width:20px;height:20px;border-radius:50%;margin-right:6px;vertical-align:middle;" />`
+      : `<span style="width:20px;height:20px;border-radius:50%;background:${color};display:inline-block;margin-right:6px;vertical-align:middle;font-size:9px;line-height:20px;text-align:center;">${handle[0]?.toUpperCase() || '?'}</span>`;
+
+    return `
+      <div class="bar-item">
+        <div class="bar-label">
+          ${avatarHtml}
+          <a href="${link}" target="_blank"
+             style="color:var(--text);text-decoration:none;"
+             title="${author}">${author}</a>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${(count/max*100).toFixed(1)}%;background:${color}"></div>
+        </div>
+        <div class="bar-value" style="color:${color}">${count}回 (${pct}%)</div>
+      </div>`;
+  }).join('');
 }
 
 // ── バイアス UI ──────────────────────────────────────────────────────────────
@@ -295,7 +335,7 @@ async function runAnalysis() {
     document.getElementById('kwCount').textContent   = `${result.topKw.length} トークン種`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
     renderKeywordChart(result.topKw);
-    renderAuthorBars(result.topAuth);
+    renderAuthorBars(result.topAuth, result.total);
 
   } catch (e) {
     // Connection error など、ユーザーに分かりやすいメッセージを表示

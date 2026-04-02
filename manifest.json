@@ -38,6 +38,9 @@
     "default_popup": "src/popup/popup.html",
     "default_title": "IBC – バイアスをチェック"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; img-src 'self' https://pbs.twimg.com https://abs.twimg.com data:;"
+  },
   "web_accessible_resources": [
     {
       "resources": [
