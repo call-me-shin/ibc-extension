@@ -161,6 +161,30 @@ const LEVELS   = [
 
 let charts = {};
 
+Chart.register({
+  id: 'centerText',
+  afterDatasetsDraw(chart) {
+    const { ctx, data, chartArea: { top, bottom, left, right } } = chart;
+    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+    const topVal = data.datasets[0].data[0] || 0;
+    const topLabel = data.labels[0] || '';
+    const pct = total > 0 ? Math.round(topVal / total * 100) : 0;
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#e8e8f0';
+    ctx.fillText(topLabel, cx, cy - 8);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#9090b0';
+    ctx.fillText(`${pct}%`, cx, cy + 10);
+    ctx.restore();
+  }
+});
+
 // ── 著者バー描画 ─────────────────────────────────────────────────────────────
 function renderAuthorBars(topAuth, totalTweets) {
   const wrap = document.getElementById('authorBars');
@@ -260,21 +284,46 @@ async function runAnalysis() {
 
   // Donut チャート
   if (charts.kw) charts.kw.destroy();
+  const kwData = topKw.map(([, c]) => c);
   charts.kw = new Chart(document.getElementById('kwDonut').getContext('2d'), {
     type: 'doughnut',
     data: {
       labels: topKw.map(([w]) => w),
-      datasets: [{ data: topKw.map(([, c]) => c), backgroundColor: PALETTE, borderColor: 'rgba(8,8,16,0.8)', borderWidth: 2, hoverOffset: 8 }],
+      datasets: [{ data: kwData, backgroundColor: PALETTE, borderColor: 'rgba(8,8,16,0.8)', borderWidth: 2, hoverOffset: 8 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '60%',
       plugins: {
-        legend:  { position: 'right', labels: { color: '#8080a0', font: { size: 11, family: "'IBM Plex Sans JP',sans-serif" }, boxWidth: 12, padding: 10 } },
-        tooltip: { backgroundColor: '#16162a', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, titleColor: '#e0e0f0', bodyColor: '#8080a0', padding: 12 },
+        legend: { display: false },
+        tooltip: { position: 'nearest', backgroundColor: '#16162a', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, titleColor: '#e0e0f0', bodyColor: '#8080a0', padding: 12,
+          callbacks: {
+            title: () => '',
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = Math.round(ctx.parsed / total * 100);
+              return ` ${ctx.label}: ${ctx.parsed}回 (${pct}%)`;
+            }
+          } },
       },
       animation: { duration: 700, easing: 'easeInOutQuart' },
     },
   });
+
+  // ランキングリストを描画
+  const kwTotal = kwData.reduce((a, b) => a + b, 0);
+  const listEl = document.getElementById('kwList');
+  if (listEl) {
+    listEl.innerHTML = topKw.map(([word, count], i) => {
+      const pct = Math.round(count / kwTotal * 100);
+      const color = PALETTE[i % PALETTE.length];
+      return `
+        <div style="display:flex;align-items:center;margin-bottom:6px;font-size:12px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-right:8px;"></span>
+          <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;flex:1;">${word}</span>
+          <span style="color:var(--text-dim);white-space:nowrap;">${count}回 (${pct}%)</span>
+        </div>`;
+    }).join('');
+  }
 
   // 著者バー
   renderAuthorBars(topAuth, tweets.length);

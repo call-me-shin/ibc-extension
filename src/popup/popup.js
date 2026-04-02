@@ -215,15 +215,40 @@ const PALETTE = [
   '#f76af7','#a0f76a','#f7976a','#6af7f7','#c86af7',
 ];
 
+Chart.register({
+  id: 'centerText',
+  afterDatasetsDraw(chart) {
+    const { ctx, data, chartArea: { top, bottom, left, right } } = chart;
+    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+    const topVal = data.datasets[0].data[0] || 0;
+    const topLabel = data.labels[0] || '';
+    const pct = total > 0 ? Math.round(topVal / total * 100) : 0;
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#e8e8f0';
+    ctx.fillText(topLabel, cx, cy - 8);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#9090b0';
+    ctx.fillText(`${pct}%`, cx, cy + 10);
+    ctx.restore();
+  }
+});
+
 function renderKeywordChart(topKw) {
   const ctx = document.getElementById('kwChart').getContext('2d');
   if (kwChart) kwChart.destroy();
+  const data = topKw.map(([, c]) => c);
   kwChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: topKw.map(([w]) => w),
       datasets: [{
-        data: topKw.map(([, c]) => c),
+        data,
         backgroundColor: PALETTE,
         borderColor: 'rgba(10,10,15,0.8)',
         borderWidth: 2, hoverOffset: 6,
@@ -232,13 +257,36 @@ function renderKeywordChart(topKw) {
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
       plugins: {
-        legend: { position: 'right', labels: { color: '#9090b0', font: { size: 10, family: "'IBM Plex Sans JP', sans-serif" }, boxWidth: 10, padding: 8 } },
-        tooltip: { backgroundColor: '#1a1a26', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, titleColor: '#e8e8f0', bodyColor: '#9090b0', padding: 10,
-          callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} 回` } },
+        legend: { display: false },
+        tooltip: { position: 'nearest', backgroundColor: '#1a1a26', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, titleColor: '#e8e8f0', bodyColor: '#9090b0', padding: 10,
+          callbacks: {
+            title: () => '',
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = Math.round(ctx.parsed / total * 100);
+              return ` ${ctx.label}: ${ctx.parsed}回 (${pct}%)`;
+            }
+          } },
       },
       animation: { duration: 600, easing: 'easeInOutQuart' },
     },
   });
+
+  // ランキングリストを描画
+  const total = data.reduce((a, b) => a + b, 0);
+  const listEl = document.getElementById('kwList');
+  if (listEl) {
+    listEl.innerHTML = topKw.map(([word, count], i) => {
+      const pct = Math.round(count / total * 100);
+      const color = PALETTE[i % PALETTE.length];
+      return `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+          <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${word}</span>
+          <span style="color:var(--text-dim);flex-shrink:0;">${count}回 (${pct}%)</span>
+        </div>`;
+    }).join('');
+  }
 }
 
 function renderAuthorBars(topAuth, totalTweets) {

@@ -213,7 +213,12 @@
   <div class="chart-grid">
     <div class="chart-card">
       <div class="card-title">話題キーワード 占有率</div>
-      <div class="chart-wrap"><canvas id="kwDonut"></canvas></div>
+      <div style="display:flex;gap:16px;align-items:center;">
+        <div style="width:200px;height:200px;flex-shrink:0;position:relative;">
+          <canvas id="kwDonut"></canvas>
+        </div>
+        <div id="kwList" style="flex:1;align-self:center;"></div>
+      </div>
     </div>
     <div class="chart-card">
       <div class="card-title">ドミナント・フィギュア Top 10</div>
