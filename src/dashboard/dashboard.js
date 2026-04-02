@@ -79,6 +79,20 @@ const EN_STOP = new Set([
   'here','still','even','back','well','way','day','time','year','people',
   'im','ive','dont','cant','wont','isnt','arent','wasnt','didnt','havent',
   'via','re','amp','rt','cc','vs','etc',
+  'today','month','week','started','starting','start','every','always','never','often',
+  'sometimes','already','again','another','between','without','through','during','before','after',
+  'around','because','while','though','although','however','therefore',
+  'something','anything','everything','nothing','someone','anyone','everyone','those','these',
+  'made','making','take','took','taking','come','came','coming','going','gone','went',
+  'saw','seen','knew','known','thought','thinking','wanted','needed',
+  'feel','felt','feeling','show','showed','shown','keep','kept',
+  'let','put','set','run','ran',
+  'high','low','big','small','long','short','old','young','early','late','hard','easy',
+  'free','full','open','close','closed',
+  'per','ago','yet','too','each','both','few','lot','lots','enough','almost',
+  'maybe','perhaps','probably','quickly','slowly','simply',
+  'using','used','being','having',
+  'said','says','told','called','call','calls','trying','tried','try',
 ]);
 
 const segmenter = new TinySegmenter();
