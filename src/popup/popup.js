@@ -282,10 +282,32 @@ function renderKeywordChart(topKw) {
       return `
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:10px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
-          <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${word}</span>
+          <span
+            style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                   cursor:pointer;text-decoration:underline;text-underline-offset:2px;"
+            data-keyword="${word}"
+            class="kw-link"
+          >${word}</span>
           <span style="color:var(--text-dim);flex-shrink:0;">${count}回 (${pct}%)</span>
         </div>`;
     }).join('');
+
+    document.querySelectorAll('.kw-link').forEach(el => {
+      el.addEventListener('click', () => {
+        const keyword = el.dataset.keyword;
+        const dashUrl = chrome.runtime.getURL('src/dashboard/dashboard.html');
+        const targetUrl = dashUrl + '?keyword=' + encodeURIComponent(keyword);
+
+        chrome.tabs.query({}, (tabs) => {
+          const existing = tabs.find(t => t.url && t.url.startsWith(dashUrl));
+          if (existing) {
+            chrome.tabs.update(existing.id, { url: targetUrl, active: true });
+          } else {
+            chrome.tabs.create({ url: targetUrl });
+          }
+        });
+      });
+    });
   }
 }
 

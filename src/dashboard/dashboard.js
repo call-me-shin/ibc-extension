@@ -229,11 +229,118 @@ function renderAuthorBars(topAuth, totalTweets) {
   }).join('');
 }
 
+let allTweets = [];
+
+function updateKeywordSelect(topKw) {
+  const select = document.getElementById('keywordSelect');
+  const current = select.value;
+  select.innerHTML = '<option value="">キーワードを選択</option>';
+  topKw.forEach(([word]) => {
+    const opt = document.createElement('option');
+    opt.value = word;
+    opt.textContent = word;
+    select.appendChild(opt);
+  });
+  if (current) select.value = current;
+}
+
+function renderPostList(keyword) {
+  const listEl = document.getElementById('postList');
+  if (!keyword) {
+    listEl.innerHTML = '<div style="color:#6060a0;font-size:12px;text-align:center;padding:20px;">キーワードを選択すると該当投稿が表示されます</div>';
+    return;
+  }
+
+  const matched = allTweets.filter(t =>
+    t.text.toLowerCase().includes(keyword.toLowerCase())
+  );
+
+  if (!matched.length) {
+    listEl.innerHTML = '<div style="color:#6060a0;font-size:12px;text-align:center;padding:20px;">該当投稿が見つかりませんでした</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  matched.forEach((t, index) => {
+    const handle = t.author.startsWith('@') ? t.author.slice(1) : t.author;
+    const profileUrl = `https://x.com/${handle}`;
+    const tweetUrl = t.tweetId
+      ? `https://x.com/${handle}/status/${t.tweetId}`
+      : null;
+
+    const highlighted = t.text.replace(
+      new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+      `<mark style="background:#f7c56a;color:#0a0a0f;border-radius:2px;padding:0 2px;">$&</mark>`
+    );
+
+    // 外側コンテナ
+    const outer = tweetUrl ? document.createElement('a') : document.createElement('div');
+    if (tweetUrl) {
+      outer.href = tweetUrl;
+      outer.target = '_blank';
+      outer.style.cssText = 'text-decoration:none;display:block;';
+    }
+
+    // カード
+    const card = document.createElement('div');
+    card.style.cssText = `background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;gap:10px;${tweetUrl ? 'cursor:pointer;' : ''}`;
+
+    // 番号
+    const num = document.createElement('div');
+    num.style.cssText = 'color:#6060a0;font-size:11px;flex-shrink:0;min-width:20px;padding-top:8px;';
+    num.textContent = index + 1;
+
+    // アバター
+    const avatarLink = document.createElement('a');
+    avatarLink.href = profileUrl;
+    avatarLink.target = '_blank';
+    avatarLink.style.flexShrink = '0';
+    if (t.avatar) {
+      const img = document.createElement('img');
+      img.src = t.avatar;
+      img.style.cssText = 'width:32px;height:32px;border-radius:50%;';
+      avatarLink.appendChild(img);
+    } else {
+      const span = document.createElement('span');
+      span.style.cssText = 'width:32px;height:32px;border-radius:50%;background:#4477AA;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;';
+      span.textContent = handle[0]?.toUpperCase() || '?';
+      avatarLink.appendChild(span);
+    }
+
+    // テキスト部分
+    const textWrap = document.createElement('div');
+    textWrap.style.cssText = 'flex:1;min-width:0;';
+
+    const authorLink = document.createElement('a');
+    authorLink.href = profileUrl;
+    authorLink.target = '_blank';
+    authorLink.style.cssText = 'color:var(--text);text-decoration:none;font-size:12px;font-weight:500;';
+    authorLink.textContent = t.author;
+
+    const textEl = document.createElement('div');
+    textEl.style.cssText = 'color:#a0a0c0;font-size:12px;margin-top:4px;line-height:1.6;word-break:break-word;';
+    textEl.innerHTML = highlighted;
+
+    textWrap.appendChild(authorLink);
+    textWrap.appendChild(textEl);
+
+    card.appendChild(num);
+    card.appendChild(avatarLink);
+    card.appendChild(textWrap);
+    outer.appendChild(card);
+    listEl.appendChild(outer);
+  });
+
+  // 投稿一覧セクションにスクロール
+  document.getElementById('postListSection').scrollIntoView({ behavior: 'smooth' });
+}
+
 // ── メイン解析 ───────────────────────────────────────────────────────────────
 async function runAnalysis() {
   document.getElementById('loading').classList.remove('hidden');
 
   const tweets = await getRecentTweets().catch(() => []);
+  allTweets = tweets;
   document.getElementById('loading').classList.add('hidden');
 
   if (!tweets.length) {
@@ -319,14 +426,31 @@ async function runAnalysis() {
       return `
         <div style="display:flex;align-items:center;margin-bottom:6px;font-size:12px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-right:8px;"></span>
-          <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;flex:1;">${word}</span>
+          <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;flex:1;
+                       cursor:pointer;text-decoration:underline;text-underline-offset:2px;"
+                data-keyword="${word}">${word}</span>
           <span style="color:var(--text-dim);white-space:nowrap;">${count}回 (${pct}%)</span>
         </div>`;
     }).join('');
+
+    const kwListEl = document.getElementById('kwList');
+    if (kwListEl) {
+      kwListEl.querySelectorAll('[data-keyword]').forEach(el => {
+        el.addEventListener('click', () => {
+          const keyword = el.dataset.keyword;
+          const select = document.getElementById('keywordSelect');
+          select.value = keyword;
+          renderPostList(keyword);
+        });
+      });
+    }
   }
 
   // 著者バー
   renderAuthorBars(topAuth, tweets.length);
+
+  updateKeywordSelect(topKw);
+  renderPostList(document.getElementById('keywordSelect').value);
 
   // タイムラインチャート（直近24時間・時間帯別）
   const now     = Date.now();
@@ -362,5 +486,18 @@ async function runAnalysis() {
 // ── イベント登録 ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnReanalyze').addEventListener('click', runAnalysis);
-  runAnalysis();
+  document.getElementById('keywordSelect').addEventListener('change', e => {
+    renderPostList(e.target.value);
+  });
+
+  // URLパラメータからキーワードを自動選択
+  runAnalysis().then(() => {
+    const params = new URLSearchParams(window.location.search);
+    const keyword = params.get('keyword');
+    if (keyword) {
+      const select = document.getElementById('keywordSelect');
+      select.value = keyword;
+      renderPostList(keyword);
+    }
+  });
 });

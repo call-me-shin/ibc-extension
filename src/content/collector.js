@@ -143,6 +143,9 @@
       '[data-testid^="UserAvatar-Container"] img',
       'a[role="link"] img[src*="profile_images"]',
     ],
+    tweetLink: [
+      'a[href*="/status/"]',
+    ],
   };
 
   function querySelector(root, selectorList) {
@@ -161,6 +164,9 @@
     const handleEl = querySelector(article, SELECTORS.authorHandle);
 
     const avatarEl = querySelector(article, SELECTORS.authorAvatar);
+    const linkEl   = querySelector(article, SELECTORS.tweetLink);
+    const tweetUrl = linkEl ? linkEl.href : '';
+    const tweetId  = tweetUrl.match(/\/status\/(\d+)/)?.[1] || '';
 
     const text   = textEl   ? textEl.innerText.trim()                : '';
     const name   = nameEl   ? nameEl.innerText.trim()                : '';
@@ -172,7 +178,7 @@
     const author = handle ? `@${handle}` : (name || '不明');
     const id     = simpleHash(author + text.slice(0, 100));
 
-    return { id, author, text, avatar, savedAt: Date.now() };
+    return { id, author, text, avatar, tweetId, savedAt: Date.now() };
   }
 
   // ── バッチキュー ─────────────────────────────────────────────────────────────

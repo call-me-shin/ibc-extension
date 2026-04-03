@@ -229,6 +229,18 @@
     <div class="card-title">蓄積ツイート タイムライン（直近24時間・時間帯別）</div>
     <div class="timeline-wrap"><canvas id="timelineChart"></canvas></div>
   </div>
+
+  <div class="wide-card" id="postListSection">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:0;">投稿一覧</div>
+      <select id="keywordSelect"
+        style="background:var(--surface2);color:var(--text);border:1px solid var(--border);
+               border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;outline:none;">
+        <option value="">キーワードを選択</option>
+      </select>
+    </div>
+    <div id="postList" style="display:flex;flex-direction:column;gap:10px;max-height:500px;overflow-y:auto;"></div>
+  </div>
 </main>
 
 <!-- CSP 準拠：インラインスクリプトなし。外部 JS のみ参照 -->
