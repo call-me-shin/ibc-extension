@@ -421,6 +421,18 @@ async function runAnalysis() {
 // ── イベント登録 ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
 
+  // URLパラメータまたはウィンドウタイプでサイドパネルを判定
+  const isSidePanel = window.self !== window.top ||
+    document.documentElement.clientWidth < 400;
+
+  if (isSidePanel) {
+    document.body.style.width = '100%';
+    document.body.style.minWidth = '320px';
+    document.body.style.maxWidth = '100%';
+  } else {
+    document.body.style.width = '400px';
+  }
+
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -446,6 +458,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnDash').addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/dashboard.html') });
+  });
+
+  document.getElementById('btnSidePanel').addEventListener('click', () => {
+    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+    window.close();
   });
 
   updateStatusBar();
