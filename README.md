@@ -69,6 +69,18 @@ curl -L https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js \
 
 ---
 
+## Bias Score Algorithm / バイアススコア算出ロジック
+
+1. **キーワード多様性**（重み 60%）：各キーワードを含む投稿数のシャノンエントロピーを正規化。1投稿内の重複は除外し、投稿数ベースで集計。
+2. **投稿者多様性**（重み 40%）：投稿者分布のシャノンエントロピーを正規化
+3. `BiasScore = (1 - 正規化エントロピー平均) × 100`
+   - 0 ≒ 多様で健全
+   - 100 ≒ 完全なフィルターバブル
+
+キーワードをクリックすると、そのキーワードをtokenize後に含む投稿のみが表示されます。
+
+---
+
 ## Known Issues / 既知の課題
 
 1. **NLP accuracy** — regex-based tokenization causes noise (TinySegmenter not yet integrated)

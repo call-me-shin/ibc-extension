@@ -183,8 +183,18 @@ function shannonEntropy(m, total) {
 
 function analyze(tweets) {
   if (!tweets.length) return null;
-  const allTokens = tweets.flatMap(t => removeStop(tokenize(t.text)));
-  const kwFreq    = freqMap(allTokens);
+  // 各投稿をtokenizeして投稿数ベースで集計
+  const kwFreq = new Map();
+  for (const t of tweets) {
+    const tokens = new Set(removeStop(tokenize(t.text)));
+    for (const token of tokens) {
+      kwFreq.set(token, (kwFreq.get(token) || 0) + 1);
+    }
+  }
+
+  // エントロピー計算用のtotal
+  const totalForEntropy = tweets.length;
+
   const topKw     = topN(kwFreq, 10);
   // 投稿者ごとの出現回数とアバターURLを集計
   const authMap = new Map();
@@ -202,7 +212,7 @@ function analyze(tweets) {
 
   // shannonEntropy 用に authFreq も作成（スコア計算で使用）
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
-  const kwEnt     = shannonEntropy(kwFreq,  allTokens.length || 1);
+  const kwEnt     = shannonEntropy(kwFreq,  totalForEntropy);
   const authEnt   = shannonEntropy(authFreq, tweets.length);
   const score     = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
   return { topKw, topAuth, score, total: tweets.length, uniqueAuthors: authFreq.size };
@@ -264,7 +274,7 @@ function renderKeywordChart(topKw) {
             label: ctx => {
               const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
               const pct = Math.round(ctx.parsed / total * 100);
-              return ` ${ctx.label}: ${ctx.parsed}回 (${pct}%)`;
+              return ` ${ctx.label}: ${ctx.parsed}件 (${pct}%)`;
             }
           } },
       },
@@ -288,7 +298,7 @@ function renderKeywordChart(topKw) {
             data-keyword="${word}"
             class="kw-link"
           >${word}</span>
-          <span style="color:var(--text-dim);flex-shrink:0;">${count}回 (${pct}%)</span>
+          <span style="color:var(--text-dim);flex-shrink:0;">${count}件 (${pct}%)</span>
         </div>`;
     }).join('');
 
@@ -402,7 +412,7 @@ async function runAnalysis() {
 
     const result = analyze(tweets);
     updateScoreUI(result.score);
-    document.getElementById('kwCount').textContent   = `${result.topKw.length} トークン種`;
+    document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
     renderKeywordChart(result.topKw);
     renderAuthorBars(result.topAuth, result.total);

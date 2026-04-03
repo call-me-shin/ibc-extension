@@ -251,9 +251,10 @@ function renderPostList(keyword) {
     return;
   }
 
-  const matched = allTweets.filter(t =>
-    t.text.toLowerCase().includes(keyword.toLowerCase())
-  );
+  const matched = allTweets.filter(t => {
+    const tokens = new Set(removeStop(tokenize(t.text)));
+    return tokens.has(keyword);
+  });
 
   if (!matched.length) {
     listEl.innerHTML = '<div style="color:#6060a0;font-size:12px;text-align:center;padding:20px;">該当投稿が見つかりませんでした</div>';
@@ -348,8 +349,18 @@ async function runAnalysis() {
     return;
   }
 
-  const allTokens = tweets.flatMap(t => removeStop(tokenize(t.text)));
-  const kwFreq    = freqMap(allTokens);
+  // 各投稿をtokenizeして投稿数ベースで集計
+  const kwFreq = new Map();
+  for (const t of tweets) {
+    const tokens = new Set(removeStop(tokenize(t.text)));
+    for (const token of tokens) {
+      kwFreq.set(token, (kwFreq.get(token) || 0) + 1);
+    }
+  }
+
+  // エントロピー計算用のtotal
+  const totalForEntropy = tweets.length;
+
   const topKw     = topN(kwFreq, 10);
 
   // 投稿者ごとの出現回数とアバターURLを集計
@@ -369,7 +380,7 @@ async function runAnalysis() {
   // entropy 用に authFreq も作成（スコア計算で使用）
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
-  const kwEnt   = entropy(kwFreq,   allTokens.length || 1);
+  const kwEnt   = entropy(kwFreq,   totalForEntropy);
   const authEnt = entropy(authFreq, tweets.length);
   const score   = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
   const level   = LEVELS.find(l => score < l.max) || LEVELS[4];
@@ -408,7 +419,7 @@ async function runAnalysis() {
             label: ctx => {
               const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
               const pct = Math.round(ctx.parsed / total * 100);
-              return ` ${ctx.label}: ${ctx.parsed}回 (${pct}%)`;
+              return ` ${ctx.label}: ${ctx.parsed}件 (${pct}%)`;
             }
           } },
       },
@@ -429,7 +440,7 @@ async function runAnalysis() {
           <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;flex:1;
                        cursor:pointer;text-decoration:underline;text-underline-offset:2px;"
                 data-keyword="${word}">${word}</span>
-          <span style="color:var(--text-dim);white-space:nowrap;">${count}回 (${pct}%)</span>
+          <span style="color:var(--text-dim);white-space:nowrap;">${count}件 (${pct}%)</span>
         </div>`;
     }).join('');
 
