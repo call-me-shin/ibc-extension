@@ -358,9 +358,6 @@ async function runAnalysis() {
     }
   }
 
-  // エントロピー計算用のtotal
-  const totalForEntropy = tweets.length;
-
   const topKw     = topN(kwFreq, 10);
 
   // 投稿者ごとの出現回数とアバターURLを集計
@@ -377,28 +374,28 @@ async function runAnalysis() {
     .slice(0, 10)
     .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
 
-  // entropy 用に authFreq も作成（スコア計算で使用）
+  // スコア計算用に authFreq を作成
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
-  const kwEnt   = entropy(kwFreq,   totalForEntropy);
-  const authEnt = entropy(authFreq, tweets.length);
-  const score   = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
-  const level   = LEVELS.find(l => score < l.max) || LEVELS[4];
-  const topA    = topAuth[0];
-  const share   = topA ? Math.round(topA.count / tweets.length * 100) : 0;
+  // フィルターバブル指数：上位10キーワードの占有率
+  const totalForEntropy = [...kwFreq.values()].reduce((a, b) => a + b, 0);
+  const top10kwSum = topN(kwFreq, 10).reduce((a, [, v]) => a + v, 0);
+  const filterBubbleScore = Math.min(100, Math.round(top10kwSum / totalForEntropy * 100));
 
+  // エコーチェンバー指数：上位5投稿者の占有率
+  const top5authSum = topN(authFreq, 5).reduce((a, [, v]) => a + v, 0);
+  const echoChamberScore = Math.min(100, Math.round(top5authSum / tweets.length * 100));
   // KPI 更新
-  document.getElementById('kpiBias').textContent      = score;
-  document.getElementById('kpiBias').style.color      = level.color;
-  document.getElementById('kpiBiasLabel').textContent = level.label;
-  document.getElementById('kpiTotal').textContent     = tweets.length;
-  document.getElementById('kpiAuthors').textContent   = authFreq.size;
-  document.getElementById('kpiTopShare').textContent  = share;
-  document.getElementById('kpiTopName').textContent   = topA ? topA.author : '—';
+  document.getElementById('kpiFilterBubble').textContent = filterBubbleScore;
+  document.getElementById('kpiEchoChamber').textContent  = echoChamberScore;
+  document.getElementById('kpiTotal').textContent        = tweets.length;
+  document.getElementById('kpiAuthors').textContent      = authFreq.size;
 
-  const oldest = Math.min(...tweets.map(t => t.savedAt));
-  const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
-  document.getElementById('metaChip').textContent = `${tweets.length} 件 / 過去 ${days} 日`;
+  const days = tweets.length > 0
+    ? Math.max(1, Math.round((Date.now() - Math.min(...tweets.map(t => t.savedAt))) / 86400000))
+    : 0;
+  document.getElementById('metaChip').textContent =
+    `${tweets.length}件 ・ ${authFreq.size}アカウント ・ 過去${days}日`;
 
   // Donut チャート
   if (charts.kw) charts.kw.destroy();

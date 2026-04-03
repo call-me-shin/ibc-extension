@@ -184,10 +184,16 @@
 <main>
   <div class="kpi-row">
     <div class="kpi-card" style="--kpi-color: var(--accent)">
-      <div class="kpi-label">Bias Score</div>
-      <div class="kpi-value" id="kpiBias" style="color:var(--accent)">—</div>
+      <div class="kpi-label">Filter Bubble</div>
+      <div class="kpi-value" id="kpiFilterBubble" style="color:var(--accent)">—</div>
       <div class="kpi-unit">/100</div>
-      <div class="kpi-sub" id="kpiBiasLabel">—</div>
+      <div class="kpi-sub">話題の偏り</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--accent2)">
+      <div class="kpi-label">Echo Chamber</div>
+      <div class="kpi-value" id="kpiEchoChamber" style="color:var(--accent2)">—</div>
+      <div class="kpi-unit">/100</div>
+      <div class="kpi-sub">情報源の偏り</div>
     </div>
     <div class="kpi-card" style="--kpi-color: var(--accent3)">
       <div class="kpi-label">Total Posts</div>
@@ -195,17 +201,11 @@
       <div class="kpi-unit">件</div>
       <div class="kpi-sub">直近7日間</div>
     </div>
-    <div class="kpi-card" style="--kpi-color: var(--accent2)">
+    <div class="kpi-card" style="--kpi-color: var(--warn)">
       <div class="kpi-label">Unique Authors</div>
-      <div class="kpi-value" id="kpiAuthors" style="color:var(--accent2)">—</div>
+      <div class="kpi-value" id="kpiAuthors" style="color:var(--warn)">—</div>
       <div class="kpi-unit">人</div>
       <div class="kpi-sub">ユニーク投稿者数</div>
-    </div>
-    <div class="kpi-card" style="--kpi-color: var(--warn)">
-      <div class="kpi-label">Top Author Share</div>
-      <div class="kpi-value" id="kpiTopShare" style="color:var(--warn)">—</div>
-      <div class="kpi-unit">%</div>
-      <div class="kpi-sub" id="kpiTopName">最多投稿者</div>
     </div>
   </div>
 

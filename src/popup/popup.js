@@ -192,9 +192,6 @@ function analyze(tweets) {
     }
   }
 
-  // エントロピー計算用のtotal
-  const totalForEntropy = tweets.length;
-
   const topKw     = topN(kwFreq, 10);
   // 投稿者ごとの出現回数とアバターURLを集計
   const authMap = new Map();
@@ -210,12 +207,18 @@ function analyze(tweets) {
     .slice(0, 10)
     .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
 
-  // shannonEntropy 用に authFreq も作成（スコア計算で使用）
+  // スコア計算用に authFreq を作成
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
-  const kwEnt     = shannonEntropy(kwFreq,  totalForEntropy);
-  const authEnt   = shannonEntropy(authFreq, tweets.length);
-  const score     = Math.min(100, Math.round(((1 - kwEnt) * 0.6 + (1 - authEnt) * 0.4) * 100));
-  return { topKw, topAuth, score, total: tweets.length, uniqueAuthors: authFreq.size };
+
+  // フィルターバブル指数：上位10キーワードの占有率
+  const totalForEntropy = [...kwFreq.values()].reduce((a, b) => a + b, 0);
+  const top10kwSum = topN(kwFreq, 10).reduce((a, [, v]) => a + v, 0);
+  const filterBubbleScore = Math.min(100, Math.round(top10kwSum / totalForEntropy * 100));
+
+  // エコーチェンバー指数：上位5投稿者の占有率
+  const top5authSum = topN(authFreq, 5).reduce((a, [, v]) => a + v, 0);
+  const echoChamberScore = Math.min(100, Math.round(top5authSum / tweets.length * 100));
+  return { topKw, topAuth, filterBubbleScore, echoChamberScore, total: tweets.length, uniqueAuthors: authFreq.size };
 }
 
 // ── Chart.js ─────────────────────────────────────────────────────────────────
@@ -373,21 +376,34 @@ const LEVELS = [
   { max: 101, label: '危険',     color: '#f76a6a', desc: '強烈なフィルターバブルが形成されています。情報源の多様化を強くお勧めします。' },
 ];
 
-function updateScoreUI(score) {
-  const level = LEVELS.find(l => score < l.max) || LEVELS[LEVELS.length - 1];
-  document.getElementById('scoreNum').textContent   = score;
-  document.getElementById('scoreNum').style.color   = level.color;
-  document.getElementById('scoreBar').style.width   = `${score}%`;
-  document.getElementById('scoreBadge').textContent = level.label;
-  document.getElementById('scoreBadge').style.color = level.color;
-  document.getElementById('scoreDesc').textContent  = level.desc;
-  document.getElementById('scoreCard').style.setProperty('--score-gradient', `linear-gradient(90deg, #6af7a0, ${level.color})`);
+// スコアを保持するグローバル変数
+let currentFilterBubbleScore = 0;
+let currentEchoChamberScore  = 0;
+
+function updateScoreUI(filterBubbleScore, echoChamberScore) {
+  currentFilterBubbleScore = filterBubbleScore;
+  currentEchoChamberScore  = echoChamberScore;
+  // アクティブなタブに応じて表示を切り替え
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab && activeTab.dataset.tab === 'authors') {
+    showScore(echoChamberScore, 'Echo Chamber', '情報源の偏り（上位5投稿者の占有率）');
+  } else {
+    showScore(filterBubbleScore, 'Filter Bubble', '話題の偏り（上位10キーワードの投稿数占有率）');
+  }
 }
 
-function setStatusMessage(msg, isError = false) {
-  const el = document.getElementById('scoreDesc');
-  el.textContent  = msg;
-  el.style.color  = isError ? '#f76a6a' : '';
+function showScore(score, label, desc) {
+  const level = LEVELS.find(l => score < l.max) || LEVELS[LEVELS.length - 1];
+  document.getElementById('scoreLabel').textContent  = label;
+  document.getElementById('scoreNum').textContent    = score;
+  document.getElementById('scoreNum').style.color    = level.color;
+  document.getElementById('scoreBar').style.width    = `${score}%`;
+  document.getElementById('scoreBadge').textContent  = level.label;
+  document.getElementById('scoreBadge').style.color  = level.color;
+  document.getElementById('scoreDesc').textContent   = desc;
+  document.getElementById('scoreCard').style.setProperty(
+    '--score-gradient', `linear-gradient(90deg, #6af7a0, ${level.color})`
+  );
 }
 
 // ── メイン解析 ───────────────────────────────────────────────────────────────
@@ -401,27 +417,23 @@ async function runAnalysis() {
   try {
     const tweets = await getRecentTweets();
 
-    document.getElementById('statusMeta').textContent = `${tweets.length} 件 / 7日間`;
-
     if (tweets.length === 0) {
       empty.style.display = 'block';
-      document.getElementById('scoreNum').textContent = '—';
-      setStatusMessage('データがありません。おすすめタブをスクロールしてください。');
       return;
     }
 
     const result = analyze(tweets);
-    updateScoreUI(result.score);
+    const oldest = Math.min(...tweets.map(t => t.savedAt));
+    const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
+    document.getElementById('statusMeta').textContent = `${tweets.length}件 ・ ${result.uniqueAuthors}アカウント ・ 過去${days}日`;
+    updateScoreUI(result.filterBubbleScore, result.echoChamberScore);
     document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
     renderKeywordChart(result.topKw);
     renderAuthorBars(result.topAuth, result.total);
 
   } catch (e) {
-    // Connection error など、ユーザーに分かりやすいメッセージを表示
-    document.getElementById('scoreNum').textContent = '—';
     document.getElementById('statusMeta').textContent = '接続エラー';
-    setStatusMessage(e.message, true);
     console.warn('[IBC Popup]', e.message);
   } finally {
     loading.classList.add('hidden');
@@ -449,6 +461,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+      // スコアを切り替え
+      if (tab.dataset.tab === 'authors') {
+        showScore(currentEchoChamberScore, 'Echo Chamber', '情報源の偏り（上位5投稿者の占有率）');
+      } else if (tab.dataset.tab === 'keywords') {
+        showScore(currentFilterBubbleScore, 'Filter Bubble', '話題の偏り（上位10キーワードの投稿数占有率）');
+      }
     });
   });
 
