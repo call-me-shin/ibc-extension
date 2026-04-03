@@ -467,6 +467,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateStatusBar();
   runAnalysis();
+
+  // タブの切り替えを監視（サイドパネル常時表示対応）
+  chrome.tabs.onActivated.addListener(() => {
+    updateStatusBar();
+  });
+
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'complete') {
+      updateStatusBar();
+    }
+  });
 });
 
 // ── ステータスバー更新 ────────────────────────────────────────────────────────
@@ -474,19 +485,23 @@ async function updateStatusBar() {
   const statusBar = document.querySelector('.status-bar span:first-child');
   if (!statusBar) return;
 
-  // 全タブからXのタブを探す
-  const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
-  const xTab = tabs.find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
-  const isHome = xTab && xTab.url && xTab.url.includes('x.com/home');
+  // 現在アクティブなタブを取得
+  const [activeTab] = await new Promise(resolve =>
+    chrome.tabs.query({ active: true, currentWindow: true }, resolve)
+  );
 
-  if (!xTab) {
-    // Xのタブが存在しない
+  // 全タブからXのタブが存在するか確認
+  const allTabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
+  const hasXTab = allTabs.some(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+
+  // アクティブなタブが /home かどうか
+  const isHome = activeTab && activeTab.url && activeTab.url.includes('x.com/home');
+
+  if (!hasXTab) {
     statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
   } else if (isHome) {
-    // /home を開いている
     statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
   } else {
-    // Xは開いているが /home ではない
     statusBar.innerHTML = '<span class="status-dot" style="background:#6060a0;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
   }
 }

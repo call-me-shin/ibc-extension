@@ -26,6 +26,25 @@
 
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans+JP:wght@300;400;500&display=swap');
 
+    html {
+      border-radius: 12px;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body {
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .header {
+      border-radius: 12px 12px 0 0;
+    }
+
+    .footer {
+      border-radius: 0 0 12px 12px;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -380,8 +399,8 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn-icon" id="btnSidePanel" title="サイドパネルで開く">⊡</button>
       <button class="btn-icon" id="btnRefresh" title="再解析">↺</button>
+      <button class="btn-icon" id="btnSidePanel" title="サイドパネルで開く">⊡</button>
       <button class="btn-icon" id="btnDash" title="詳細ダッシュボード">⊞</button>
     </div>
   </div>
