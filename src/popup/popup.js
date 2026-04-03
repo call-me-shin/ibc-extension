@@ -448,5 +448,28 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/dashboard.html') });
   });
 
+  updateStatusBar();
   runAnalysis();
 });
+
+// ── ステータスバー更新 ────────────────────────────────────────────────────────
+async function updateStatusBar() {
+  const statusBar = document.querySelector('.status-bar span:first-child');
+  if (!statusBar) return;
+
+  // 全タブからXのタブを探す
+  const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
+  const xTab = tabs.find(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
+  const isHome = xTab && xTab.url && xTab.url.includes('x.com/home');
+
+  if (!xTab) {
+    // Xのタブが存在しない
+    statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+  } else if (isHome) {
+    // /home を開いている
+    statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
+  } else {
+    // Xは開いているが /home ではない
+    statusBar.innerHTML = '<span class="status-dot" style="background:#6060a0;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+  }
+}

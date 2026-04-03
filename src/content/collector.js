@@ -283,6 +283,11 @@
     observer.observe(target, { childList: true, subtree: true });
     scanVisible();
     console.log('[IBC] Observer started on /home');
+    // ページ状態をService Workerに通知
+    chrome.runtime.sendMessage({
+      type: 'PAGE_STATUS',
+      isHome: isHomeline()
+    }).catch(() => {});
   }
 
   function stopObserving() {
@@ -301,6 +306,11 @@
     if (isHomeline()) {
       setTimeout(startObserving, 1500);
     }
+    // ページ状態をService Workerに通知
+    chrome.runtime.sendMessage({
+      type: 'PAGE_STATUS',
+      isHome: isHomeline()
+    }).catch(() => {});
   }
 
   const origPushState    = history.pushState.bind(history);

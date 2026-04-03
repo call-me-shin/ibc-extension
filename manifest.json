@@ -11,7 +11,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "tabs"
+    "tabs",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://x.com/*",
@@ -34,6 +35,9 @@
       "run_at": "document_idle"
     }
   ],
+  "side_panel": {
+    "default_path": "src/popup/popup.html"
+  },
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_title": "IBC – バイアスをチェック"

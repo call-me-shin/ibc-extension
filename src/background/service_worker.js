@@ -72,6 +72,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // 非同期 sendResponse のために必須
   }
 
+  if (message.type === 'PAGE_STATUS') {
+    const isHome = message.isHome;
+    if (isHome) {
+      chrome.action.setBadgeText({ text: '●' });
+      chrome.action.setBadgeBackgroundColor({ color: '#228833' });
+      chrome.action.setTitle({ title: 'IBC – チェック中' });
+    } else {
+      chrome.action.setBadgeText({ text: '○' });
+      chrome.action.setBadgeBackgroundColor({ color: '#6060a0' });
+      chrome.action.setTitle({ title: 'IBC – X を開いています' });
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (message.type === 'GET_STATS') {
     // Popup が直接 IDB を開けない場合のフォールバック用
     // 通常は Popup 側で直接 IDB を開く
@@ -81,3 +96,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 console.log('[IBC SW] Service Worker loaded.');
+
+// ── バッジ制御 ────────────────────────────────────────────────────────────────
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.action.setBadgeBackgroundColor({ color: '#228833' });
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  const tab = await chrome.tabs.get(activeInfo.tabId);
+  updateBadge(tab.url);
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    updateBadge(tab.url);
+  }
+});
+
+function updateBadge(url) {
+  const isHome = url && url.includes('x.com/home');
+
+  if (isHome) {
+    chrome.action.setBadgeText({ text: '●' });
+    chrome.action.setBadgeBackgroundColor({ color: '#228833' });
+    chrome.action.setTitle({ title: 'IBC – チェック中' });
+  } else {
+    chrome.action.setBadgeText({ text: '○' });
+    chrome.action.setBadgeBackgroundColor({ color: '#888888' });
+    chrome.action.setTitle({ title: 'IBC – 待機中' });
+  }
+}
+
+// ── サイドパネル設定 ──────────────────────────────────────────────────────────
+// アイコンクリック時の動作（サイドパネル or ポップアップ）
+// デフォルトはポップアップ（manifest.jsonのdefault_popupが有効）
+// サイドパネルはChromeのサイドパネルボタンから開く
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
