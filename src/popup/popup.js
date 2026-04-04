@@ -228,89 +228,63 @@ const PALETTE = [
   '#f76af7','#a0f76a','#f7976a','#6af7f7','#c86af7',
 ];
 
-Chart.register({
-  id: 'centerText',
-  afterDatasetsDraw(chart) {
-    const { ctx, data, chartArea: { top, bottom, left, right } } = chart;
-    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
-    const topVal = data.datasets[0].data[0] || 0;
-    const topLabel = data.labels[0] || '';
-    const pct = total > 0 ? Math.round(topVal / total * 100) : 0;
-    const cx = (left + right) / 2;
-    const cy = (top + bottom) / 2;
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.fillStyle = '#e8e8f0';
-    ctx.fillText(topLabel, cx, cy - 8);
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = '#9090b0';
-    ctx.fillText(`${pct}%`, cx, cy + 10);
-    ctx.restore();
-  }
-});
-
-function renderKeywordChart(topKw) {
+function renderKeywordChart(topKw, totalTweets) {
   const ctx = document.getElementById('kwChart').getContext('2d');
   if (kwChart) kwChart.destroy();
-  const data = topKw.map(([, c]) => c);
+  const dataLabelPlugin = {
+    id: 'dataLabel',
+    afterDatasetsDraw(chart) {
+      const { ctx, data, chartArea } = chart;
+      ctx.save();
+      ctx.font = '9px sans-serif';
+      ctx.textBaseline = 'middle';
+      data.datasets[0].data.forEach((value, i) => {
+        const bar = chart.getDatasetMeta(0).data[i];
+        const color = data.datasets[0].backgroundColor[i];
+        const pct = Math.round(value / totalTweets * 100);
+        const x = chartArea.right + 6;
+        const y = bar.y;
+        ctx.fillStyle = color;
+        ctx.fillText(`${value}件 (${pct}%)`, x, y);
+      });
+      ctx.restore();
+    }
+  };
   kwChart = new Chart(ctx, {
-    type: 'doughnut',
+    type: 'bar',
     data: {
       labels: topKw.map(([w]) => w),
       datasets: [{
-        data,
-        backgroundColor: PALETTE,
-        borderColor: 'rgba(10,10,15,0.8)',
-        borderWidth: 2, hoverOffset: 6,
+        data: topKw.map(([, c]) => c),
+        backgroundColor: PALETTE.slice(0, topKw.length),
+        borderRadius: 3,
+        borderSkipped: false,
       }],
     },
     options: {
-      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 70 } },
       plugins: {
         legend: { display: false },
-        tooltip: { position: 'nearest', backgroundColor: '#1a1a26', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, titleColor: '#e8e8f0', bodyColor: '#9090b0', padding: 10,
+        tooltip: {
+          backgroundColor: '#1a1a26', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
+          titleColor: '#e8e8f0', bodyColor: '#9090b0', padding: 10,
           callbacks: {
             title: () => '',
             label: ctx => {
-              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-              const pct = Math.round(ctx.parsed / total * 100);
-              return ` ${ctx.label}: ${ctx.parsed}件 (${pct}%)`;
+              const count = ctx.parsed.x;
+              const pct = Math.round(count / totalTweets * 100);
+              return ` ${ctx.label}: ${count}件 (${pct}%)`;
             }
-          } },
+          }
+        },
       },
-      animation: { duration: 600, easing: 'easeInOutQuart' },
-    },
-  });
-
-  // ランキングリストを描画
-  const total = data.reduce((a, b) => a + b, 0);
-  const listEl = document.getElementById('kwList');
-  if (listEl) {
-    listEl.innerHTML = topKw.map(([word, count], i) => {
-      const pct = Math.round(count / total * 100);
-      const color = PALETTE[i % PALETTE.length];
-      return `
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:10px;">
-          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
-          <span
-            style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-                   cursor:pointer;text-decoration:underline;text-underline-offset:2px;"
-            data-keyword="${word}"
-            class="kw-link"
-          >${word}</span>
-          <span style="color:var(--text-dim);flex-shrink:0;">${count}件 (${pct}%)</span>
-        </div>`;
-    }).join('');
-
-    document.querySelectorAll('.kw-link').forEach(el => {
-      el.addEventListener('click', () => {
-        const keyword = el.dataset.keyword;
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const [word] = topKw[elements[0].index];
         const dashUrl = chrome.runtime.getURL('src/dashboard/dashboard.html');
-        const targetUrl = dashUrl + '?keyword=' + encodeURIComponent(keyword);
-
+        const targetUrl = dashUrl + '?keyword=' + encodeURIComponent(word);
         chrome.tabs.query({}, (tabs) => {
           const existing = tabs.find(t => t.url && t.url.startsWith(dashUrl));
           if (existing) {
@@ -319,9 +293,21 @@ function renderKeywordChart(topKw) {
             chrome.tabs.create({ url: targetUrl });
           }
         });
-      });
-    });
-  }
+      },
+      animation: { duration: 600, easing: 'easeInOutQuart' },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.06)' },
+          ticks: { color: '#9090b0', font: { size: 9 } },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#e8e8f0', font: { size: 10 } },
+        },
+      },
+    },
+    plugins: [dataLabelPlugin],
+  });
 }
 
 function renderAuthorBars(topAuth, totalTweets) {
@@ -429,7 +415,7 @@ async function runAnalysis() {
     updateScoreUI(result.filterBubbleScore, result.echoChamberScore);
     document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
-    renderKeywordChart(result.topKw);
+    renderKeywordChart(result.topKw, result.total);
     renderAuthorBars(result.topAuth, result.total);
 
   } catch (e) {
