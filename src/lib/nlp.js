@@ -106,9 +106,6 @@ export function removeStopwords(tokens) {
   return tokens.filter(t => {
     if (JP_STOP.has(t)) return false;
     if (EN_STOP.has(t)) return false;
-    if (/^\d+$/.test(t)) return false;
-    if (/^[a-z]{1,2}$/.test(t)) return false;
-    if (/^[^\w\u3040-\u9FFF]+$/.test(t)) return false;
     return true;
   });
 }
