@@ -140,79 +140,6 @@
       50%       { opacity: 0.3; }
     }
 
-    /* ── Bias Score Card ────────────────────────────────────── */
-    .score-card {
-      margin: 8px 20px 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      position: relative;
-      overflow: hidden;
-    }
-    .score-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: var(--score-gradient, linear-gradient(90deg, var(--ok), var(--warn)));
-    }
-    .score-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 14px;
-    }
-    .score-label {
-      font-family: var(--font-head);
-      font-size: 9px;
-      letter-spacing: 2px;
-      color: var(--text-dim);
-      text-transform: uppercase;
-    }
-    .score-badge {
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-weight: 500;
-      border: 1px solid currentColor;
-    }
-    .score-display {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-      margin-bottom: 0;
-    }
-    .score-number {
-      font-family: var(--font-head);
-      font-size: 36px;
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: -2px;
-      transition: color 0.5s;
-    }
-    .score-unit { color: var(--text-dim); font-size: 20px; margin-bottom: 8px; }
-    .score-bar-wrap {
-      margin-top: 8px;
-      height: 6px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .score-bar {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-      background: linear-gradient(90deg, var(--ok), var(--warn), var(--danger));
-      background-size: 300% 100%;
-    }
-    .score-desc {
-      margin-top: 8px;
-      font-size: 10px;
-      color: var(--text-dim);
-      line-height: 1.5;
-    }
-
     /* ── Section ────────────────────────────────────────────── */
     .section {
       margin: 8px 20px 0;
@@ -409,24 +336,6 @@
   <div class="status-bar">
     <span><span class="status-dot"></span>チェック中 — X タイムライン</span>
     <span id="statusMeta">読み込み中...</span>
-  </div>
-
-  <!-- Bias Score -->
-  <div class="score-card" id="scoreCard">
-    <div class="score-header">
-      <div>
-        <div class="score-label" id="scoreLabel">Filter Bubble</div>
-      </div>
-      <div class="score-badge" id="scoreBadge">—</div>
-    </div>
-    <div class="score-display">
-      <div class="score-number" id="scoreNum">—</div>
-      <div class="score-unit">/100</div>
-    </div>
-    <div class="score-bar-wrap">
-      <div class="score-bar" id="scoreBar" style="width:0%"></div>
-    </div>
-    <div class="score-desc" id="scoreDesc">解析中...</div>
   </div>
 
   <!-- Tabs -->

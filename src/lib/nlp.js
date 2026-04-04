@@ -1,4 +1,4 @@
-// src/lib/nlp.js
+// src/lib/nlp.js — v0.5.0
 // ─────────────────────────────────────────────────────────────────────────────
 // 軽量 日本語 NLP ユーティリティ
 //
@@ -143,13 +143,12 @@ export function topN(freqMap, topN = 10) {
  * @returns {{
  *   topKeywords: { word: string, count: number }[],
  *   topAuthors:  { author: string, count: number }[],
- *   biasScore:   number,   // 0–100
  *   totalTweets: number,
  * }}
  */
 export function analyze(tweets) {
   if (!tweets || tweets.length === 0) {
-    return { topKeywords: [], topAuthors: [], biasScore: 0, totalTweets: 0 };
+    return { topKeywords: [], topAuthors: [], totalTweets: 0 };
   }
 
   // ── キーワード集計 ──────────────────────────────────────
@@ -168,35 +167,5 @@ export function analyze(tweets) {
     .slice(0, 10)
     .map(([author, count]) => ({ author, count }));
 
-  // ── バイアススコア算出 ────────────────────────────────────
-  // ロジック：
-  //   1. 上位1ワードのシェアが高いほど「話題の偏り」が大
-  //   2. 上位1投稿者のシェアが高いほど「声の偏り」が大
-  //   3. 両者の加重平均を 0–100 にスケール
-
-  const totalTokens   = allTokens.length || 1;
-  const topWordShare  = topKeywords[0]  ? topKeywords[0].count  / totalTokens  : 0;
-
-  const totalPosts    = tweets.length;
-  const topAuthorShare = topAuthors[0] ? topAuthors[0].count / totalPosts : 0;
-
-  // 多様性エントロピー（Shannon entropy 正規化）
-  const entropy = (freqMap, total) => {
-    let h = 0;
-    for (const [, v] of freqMap) {
-      const p = v / total;
-      if (p > 0) h -= p * Math.log2(p);
-    }
-    const maxH = Math.log2(freqMap.size || 1);
-    return maxH === 0 ? 0 : h / maxH; // 0(偏り最大) → 1(均一)
-  };
-
-  const kwEntropy  = entropy(keywordFreq, totalTokens);
-  const authEntropy = entropy(authorFreq,  totalPosts);
-
-  // バイアス = (1 - 正規化エントロピー) × 100
-  const rawScore = ((1 - kwEntropy) * 0.6 + (1 - authEntropy) * 0.4) * 100;
-  const biasScore = Math.min(100, Math.round(rawScore));
-
-  return { topKeywords, topAuthors, biasScore, totalTweets: tweets.length };
+  return { topKeywords, topAuthors, totalTweets: tweets.length };
 }

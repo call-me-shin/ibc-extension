@@ -1,4 +1,4 @@
-// src/dashboard/dashboard.js
+// src/dashboard/dashboard.js — v0.5.0
 // ─────────────────────────────────────────────────────────────────────────────
 // IBC Dashboard – 解析ロジック（dashboard.html から分離）
 // CSP 準拠：インラインスクリプト不使用
@@ -148,13 +148,6 @@ function entropy(m, total) {
 }
 
 const PALETTE  = ['#7c6af7','#f76a8a','#6af7c8','#f7c56a','#6ab4f7','#f76af7','#a0f76a','#f7976a','#6af7f7','#c86af7'];
-const LEVELS   = [
-  { max: 20,  label: '健全',     color: '#6af7a0' },
-  { max: 40,  label: '軽度偏向', color: '#a0f76a' },
-  { max: 60,  label: '中程度',   color: '#f7c56a' },
-  { max: 80,  label: '高偏向',   color: '#f7976a' },
-  { max: 101, label: '危険',     color: '#f76a6a' },
-];
 
 let charts = {};
 
@@ -348,22 +341,11 @@ async function runAnalysis() {
     .slice(0, 10)
     .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
 
-  // スコア計算用に authFreq を作成
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
-  // フィルターバブル指数：上位10キーワードの占有率
-  const totalForEntropy = [...kwFreq.values()].reduce((a, b) => a + b, 0);
-  const top10kwSum = topN(kwFreq, 10).reduce((a, [, v]) => a + v, 0);
-  const filterBubbleScore = Math.min(100, Math.round(top10kwSum / totalForEntropy * 100));
-
-  // エコーチェンバー指数：上位5投稿者の占有率
-  const top5authSum = topN(authFreq, 5).reduce((a, [, v]) => a + v, 0);
-  const echoChamberScore = Math.min(100, Math.round(top5authSum / tweets.length * 100));
   // KPI 更新
-  document.getElementById('kpiFilterBubble').textContent = filterBubbleScore;
-  document.getElementById('kpiEchoChamber').textContent  = echoChamberScore;
-  document.getElementById('kpiTotal').textContent        = tweets.length;
-  document.getElementById('kpiAuthors').textContent      = authFreq.size;
+  document.getElementById('kpiTotal').textContent   = tweets.length;
+  document.getElementById('kpiAuthors').textContent = authFreq.size;
 
   const days = tweets.length > 0
     ? Math.max(1, Math.round((Date.now() - Math.min(...tweets.map(t => t.savedAt))) / 86400000))
