@@ -1,4 +1,4 @@
-// src/dashboard/dashboard.js — v0.5.0
+// src/dashboard/dashboard.js — v0.5.1
 // ─────────────────────────────────────────────────────────────────────────────
 // IBC Dashboard – 解析ロジック（dashboard.html から分離）
 // CSP 準拠：インラインスクリプト不使用
@@ -353,7 +353,8 @@ async function runAnalysis() {
   document.getElementById('metaChip').textContent =
     `${tweets.length}件 ・ ${authFreq.size}アカウント ・ 過去${days}日`;
 
-  // キーワード横棒グラフ
+  // キーワード横棒グラフ（1位=100% 相対表示）
+  const kwMaxCount = topKw.length > 0 ? topKw[0][1] : 1;
   if (charts.kw) charts.kw.destroy();
   const dataLabelPlugin = {
     id: 'dataLabel',
@@ -362,14 +363,15 @@ async function runAnalysis() {
       ctx.save();
       ctx.font = '9px sans-serif';
       ctx.textBaseline = 'middle';
-      data.datasets[0].data.forEach((value, i) => {
+      data.datasets[0].data.forEach((_, i) => {
         const bar = chart.getDatasetMeta(0).data[i];
         const color = data.datasets[0].backgroundColor[i];
-        const pct = Math.round(value / tweets.length * 100);
+        const count = topKw[i][1];
+        const pct = Math.round(count / tweets.length * 100);
         const x = chartArea.right + 6;
         const y = bar.y;
         ctx.fillStyle = color;
-        ctx.fillText(`${value}件 (${pct}%)`, x, y);
+        ctx.fillText(`${count}件 (${pct}%)`, x, y);
       });
       ctx.restore();
     }
@@ -379,7 +381,7 @@ async function runAnalysis() {
     data: {
       labels: topKw.map(([w]) => w),
       datasets: [{
-        data: topKw.map(([, c]) => c),
+        data: topKw.map(([, c]) => Math.round(c / kwMaxCount * 100)),
         backgroundColor: PALETTE.slice(0, topKw.length),
         borderRadius: 3,
         borderSkipped: false,
@@ -397,7 +399,7 @@ async function runAnalysis() {
           callbacks: {
             title: () => '',
             label: ctx => {
-              const count = ctx.parsed.x;
+              const count = topKw[ctx.dataIndex][1];
               const pct = Math.round(count / tweets.length * 100);
               return ` ${ctx.label}: ${count}件 (${pct}%)`;
             }
@@ -414,8 +416,9 @@ async function runAnalysis() {
       animation: { duration: 700, easing: 'easeInOutQuart' },
       scales: {
         x: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#6060a0', font: { size: 9 } },
+          max: 100,
+          grid: { display: false },
+          ticks: { display: false },
         },
         y: {
           grid: { display: false },
@@ -432,19 +435,24 @@ async function runAnalysis() {
   updateKeywordSelect(topKw);
   renderPostList(document.getElementById('keywordSelect').value);
 
-  // タイムラインチャート（直近24時間・時間帯別）
-  const now     = Date.now();
-  const buckets = Array.from({ length: 24 }, (_, i) => ({ h: i, count: 0 }));
+  // タイムラインチャート（直近7日間・日別）
+  const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+  const now = Date.now();
+  const MS_PER_DAY = 86400000;
+  const buckets = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now - (6 - i) * MS_PER_DAY);
+    return { date: d, count: 0 };
+  });
   tweets.forEach(t => {
-    const hoursAgo = Math.floor((now - t.savedAt) / 3600000);
-    if (hoursAgo < 24) buckets[23 - hoursAgo].count++;
+    const daysAgo = Math.floor((now - t.savedAt) / MS_PER_DAY);
+    if (daysAgo < 7) buckets[6 - daysAgo].count++;
   });
 
   if (charts.tl) charts.tl.destroy();
   charts.tl = new Chart(document.getElementById('timelineChart').getContext('2d'), {
     type: 'bar',
     data: {
-      labels: buckets.map(b => `-${23 - b.h}h`),
+      labels: buckets.map(b => `${DAY_NAMES[b.date.getDay()]}(${b.date.getMonth() + 1}/${b.date.getDate()})`),
       datasets: [{
         data: buckets.map(b => b.count),
         backgroundColor: 'rgba(124,106,247,0.5)',
@@ -457,7 +465,7 @@ async function runAnalysis() {
       plugins: { legend: { display: false }, tooltip: { backgroundColor: '#16162a', titleColor: '#e0e0f0', bodyColor: '#8080a0', padding: 10 } },
       scales: {
         x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6060a0', font: { size: 9 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6060a0', font: { size: 9 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6060a0', font: { size: 9 }, stepSize: 1 } },
       },
     },
   });
@@ -469,6 +477,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('keywordSelect').addEventListener('change', e => {
     renderPostList(e.target.value);
   });
+
+  // ウィンドウサイズ変更時にチャートを再描画（サイドパネル開閉対応）
+  const resizeObserver = new ResizeObserver(() => {
+    if (charts.kw) charts.kw.resize();
+    if (charts.tl) charts.tl.resize();
+  });
+  resizeObserver.observe(document.querySelector('main'));
 
   // URLパラメータからキーワードを自動選択
   runAnalysis().then(() => {

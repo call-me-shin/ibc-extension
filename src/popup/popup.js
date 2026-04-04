@@ -1,4 +1,4 @@
-// src/popup/popup.js — v0.5.0
+// src/popup/popup.js — v0.5.1
 // ─────────────────────────────────────────────────────────────────────────────
 // 修正内容:
 //   - Connection error を適切にハンドリングし、ユーザーに原因を表示
@@ -212,6 +212,7 @@ const PALETTE = [
 function renderKeywordChart(topKw, totalTweets) {
   const ctx = document.getElementById('kwChart').getContext('2d');
   if (kwChart) kwChart.destroy();
+  const kwMaxCount = topKw.length > 0 ? topKw[0][1] : 1;
   const dataLabelPlugin = {
     id: 'dataLabel',
     afterDatasetsDraw(chart) {
@@ -219,14 +220,15 @@ function renderKeywordChart(topKw, totalTweets) {
       ctx.save();
       ctx.font = '9px sans-serif';
       ctx.textBaseline = 'middle';
-      data.datasets[0].data.forEach((value, i) => {
+      data.datasets[0].data.forEach((_, i) => {
         const bar = chart.getDatasetMeta(0).data[i];
         const color = data.datasets[0].backgroundColor[i];
-        const pct = Math.round(value / totalTweets * 100);
+        const count = topKw[i][1];
+        const pct = Math.round(count / totalTweets * 100);
         const x = chartArea.right + 6;
         const y = bar.y;
         ctx.fillStyle = color;
-        ctx.fillText(`${value}件 (${pct}%)`, x, y);
+        ctx.fillText(`${count}件 (${pct}%)`, x, y);
       });
       ctx.restore();
     }
@@ -236,7 +238,7 @@ function renderKeywordChart(topKw, totalTweets) {
     data: {
       labels: topKw.map(([w]) => w),
       datasets: [{
-        data: topKw.map(([, c]) => c),
+        data: topKw.map(([, c]) => Math.round(c / kwMaxCount * 100)),
         backgroundColor: PALETTE.slice(0, topKw.length),
         borderRadius: 3,
         borderSkipped: false,
@@ -254,7 +256,7 @@ function renderKeywordChart(topKw, totalTweets) {
           callbacks: {
             title: () => '',
             label: ctx => {
-              const count = ctx.parsed.x;
+              const count = topKw[ctx.dataIndex][1];
               const pct = Math.round(count / totalTweets * 100);
               return ` ${ctx.label}: ${count}件 (${pct}%)`;
             }
@@ -278,8 +280,9 @@ function renderKeywordChart(topKw, totalTweets) {
       animation: { duration: 600, easing: 'easeInOutQuart' },
       scales: {
         x: {
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: { color: '#9090b0', font: { size: 9 } },
+          max: 100,
+          grid: { display: false },
+          ticks: { display: false },
         },
         y: {
           grid: { display: false },
@@ -406,7 +409,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btnDash').addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/dashboard.html') });
+    const dashUrl = chrome.runtime.getURL('src/dashboard/dashboard.html');
+    chrome.tabs.query({}, (tabs) => {
+      const existing = tabs.find(t => t.url && t.url.startsWith(dashUrl));
+      if (existing) {
+        chrome.tabs.update(existing.id, { active: true });
+        chrome.windows.update(existing.windowId, { focused: true });
+      } else {
+        chrome.tabs.create({ url: dashUrl });
+      }
+    });
   });
 
   document.getElementById('btnSidePanel').addEventListener('click', () => {
