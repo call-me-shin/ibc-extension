@@ -2,3 +2,4 @@ src/lib/chart.min.js
 src/lib/tinysegmenter.min.js
 .vscode/settings.local.json
 .claude/
+CLAUDE.md
