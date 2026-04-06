@@ -72,20 +72,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // 非同期 sendResponse のために必須
   }
 
-  if (message.type === 'PAGE_STATUS') {
-    if (message.isHome && message.isForYou) {
-      chrome.action.setBadgeText({ text: '●' });
-      chrome.action.setBadgeBackgroundColor({ color: '#228833' });
-      chrome.action.setTitle({ title: 'IBC – チェック中' });
-    } else {
-      chrome.action.setBadgeText({ text: '○' });
-      chrome.action.setBadgeBackgroundColor({ color: '#888888' });
-      chrome.action.setTitle({ title: 'IBC – 待機中' });
-    }
-    sendResponse({ success: true });
-    return false;
-  }
-
   if (message.type === 'GET_STATS') {
     // Popup が直接 IDB を開けない場合のフォールバック用
     // 通常は Popup 側で直接 IDB を開く
@@ -116,18 +102,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 function updateBadge(url) {
   const isHome = url && url.includes('x.com/home');
-  const isX = url && (url.includes('x.com') || url.includes('twitter.com'));
-
-  if (!isX) {
-    chrome.action.setBadgeText({ text: '○' });
-    chrome.action.setBadgeBackgroundColor({ color: '#888888' });
-    chrome.action.setTitle({ title: 'IBC – 待機中' });
-  } else if (!isHome) {
+  if (isHome) {
+    chrome.action.setBadgeText({ text: '●' });
+    chrome.action.setBadgeBackgroundColor({ color: '#228833' });
+    chrome.action.setTitle({ title: 'IBC – チェック中' });
+  } else {
     chrome.action.setBadgeText({ text: '○' });
     chrome.action.setBadgeBackgroundColor({ color: '#888888' });
     chrome.action.setTitle({ title: 'IBC – 待機中' });
   }
-  // isHome の場合は PAGE_STATUS に任せる
 }
 
 // ── サイドパネル設定 ──────────────────────────────────────────────────────────

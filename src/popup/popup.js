@@ -451,36 +451,34 @@ async function updateStatusBar() {
   const statusBar = document.querySelector('.status-bar span:first-child');
   if (!statusBar) return;
 
-  // 現在アクティブなタブを取得
   const [activeTab] = await new Promise(resolve =>
     chrome.tabs.query({ active: true, currentWindow: true }, resolve)
   );
 
-  // 全タブからXのタブが存在するか確認
-  const allTabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
-  const hasXTab = allTabs.some(t => t.url && (t.url.includes('x.com') || t.url.includes('twitter.com')));
-
-  // アクティブなタブが /home かどうか
   const isHome = activeTab && activeTab.url && activeTab.url.includes('x.com/home');
-
   const banner = document.getElementById('waitingBanner');
 
-  if (!hasXTab || !isHome) {
-    const dotColor = !hasXTab ? '#888888' : '#6060a0';
-    statusBar.innerHTML = `<span class="status-dot" style="background:${dotColor};animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン`;
+  if (!isHome) {
+    statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
     if (banner) banner.style.display = 'block';
     return;
   }
 
   // isHome が true の場合、おすすめタブかどうかを content script に問い合わせる
   const statusRes = await sendToXTab({ type: 'GET_STATUS' });
-  const isForYou = statusRes && statusRes.success && statusRes.isForYou;
 
-  if (isForYou) {
+  // 失敗時はフォールバック：チェック中扱い
+  if (!statusRes || !statusRes.success) {
+    statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  if (statusRes.isForYou) {
     statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
     if (banner) banner.style.display = 'none';
   } else {
-    statusBar.innerHTML = '<span class="status-dot" style="background:#6060a0;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+    statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
     if (banner) banner.style.display = 'block';
   }
 }
