@@ -312,9 +312,10 @@ async function runAnalysis() {
   document.getElementById('loading').classList.add('hidden');
 
   if (!tweets.length) {
-    document.getElementById('metaChip').textContent = 'データなし — /home をスクロールしてください';
+    document.getElementById('dashWaitingBanner').style.display = 'block';
     return;
   }
+  document.getElementById('dashWaitingBanner').style.display = 'none';
 
   // 各投稿をtokenizeして投稿数ベースで集計
   const kwFreq = new Map();

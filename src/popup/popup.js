@@ -57,7 +57,7 @@ async function getRecentTweets() {
     // reason ごとにユーザー向けメッセージを返す
     const msgs = {
       NO_TAB:    'Xのタブが見つかりません。x.com を開いてください。',
-      NOT_READY: 'Xのページを再読み込みしてから、もう一度お試しください。',
+      NOT_READY: 'Xのページを再読み込みするか、拡張機能の更新ボタンをお試しください。',
       NO_RESPONSE: '応答がありませんでした。拡張機能を更新してください。',
     };
     throw new Error(msgs[res.reason] || res.error || '不明なエラー');
@@ -364,6 +364,11 @@ async function runAnalysis() {
 
   } catch (e) {
     document.getElementById('statusMeta').textContent = '接続エラー';
+    const empty = document.getElementById('emptyState');
+    empty.style.display = 'block';
+    empty.querySelector('.empty-icon').textContent = '⚠️';
+    empty.querySelector('.empty-title').textContent = '接続できませんでした';
+    empty.querySelector('.empty-desc').textContent = e.message;
     console.warn('[IBC Popup]', e.message);
   } finally {
     loading.classList.add('hidden');
@@ -458,11 +463,16 @@ async function updateStatusBar() {
   // アクティブなタブが /home かどうか
   const isHome = activeTab && activeTab.url && activeTab.url.includes('x.com/home');
 
+  const banner = document.getElementById('waitingBanner');
+
   if (!hasXTab) {
     statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+    if (banner) banner.style.display = 'block';
   } else if (isHome) {
     statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
+    if (banner) banner.style.display = 'none';
   } else {
     statusBar.innerHTML = '<span class="status-dot" style="background:#6060a0;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+    if (banner) banner.style.display = 'block';
   }
 }
