@@ -272,6 +272,41 @@
     if (changed) scanVisible();
   });
 
+  // ── タブ切り替え監視 ──────────────────────────────────────────────────────────
+  let tabObserver = null;
+  let tabFallbackObserver = null;
+
+  function notifyPageStatus() {
+    chrome.runtime.sendMessage({
+      type: 'PAGE_STATUS',
+      isHome: isHomeline(),
+      isForYou: isForYouTab()
+    }).catch(() => {});
+  }
+
+  function startTabObserver() {
+    if (tabObserver) { tabObserver.disconnect(); tabObserver = null; }
+    if (tabFallbackObserver) { tabFallbackObserver.disconnect(); tabFallbackObserver = null; }
+
+    const tabContainer = document.querySelector('[role="tablist"]');
+    if (tabContainer) {
+      tabObserver = new MutationObserver(() => notifyPageStatus());
+      tabObserver.observe(tabContainer, { attributes: true, subtree: true, attributeFilter: ['aria-selected'] });
+    } else {
+      // tablist がまだ存在しない場合は body を監視して出現を待つ
+      tabFallbackObserver = new MutationObserver(() => {
+        const found = document.querySelector('[role="tablist"]');
+        if (found) {
+          tabFallbackObserver.disconnect();
+          tabFallbackObserver = null;
+          tabObserver = new MutationObserver(() => notifyPageStatus());
+          tabObserver.observe(found, { attributes: true, subtree: true, attributeFilter: ['aria-selected'] });
+        }
+      });
+      tabFallbackObserver.observe(document.body, { childList: true, subtree: true, attributes: true });
+    }
+  }
+
   function startObserving() {
     if (!isHomeline()) {
       console.log('[IBC] Not /home — observer paused.');
@@ -282,16 +317,20 @@
                 || document.body;
     observer.observe(target, { childList: true, subtree: true });
     scanVisible();
+    startTabObserver();
     console.log('[IBC] Observer started on /home');
     // ページ状態をService Workerに通知
     chrome.runtime.sendMessage({
       type: 'PAGE_STATUS',
-      isHome: isHomeline()
+      isHome: isHomeline(),
+      isForYou: isForYouTab()
     }).catch(() => {});
   }
 
   function stopObserving() {
     observer.disconnect();
+    if (tabObserver) { tabObserver.disconnect(); tabObserver = null; }
+    if (tabFallbackObserver) { tabFallbackObserver.disconnect(); tabFallbackObserver = null; }
     console.log('[IBC] Observer stopped.');
   }
 
@@ -309,7 +348,8 @@
     // ページ状態をService Workerに通知
     chrome.runtime.sendMessage({
       type: 'PAGE_STATUS',
-      isHome: isHomeline()
+      isHome: isHomeline(),
+      isForYou: isForYouTab()
     }).catch(() => {});
   }
 
@@ -344,6 +384,11 @@
       clearTweets()
         .then(()  => sendResponse({ success: true }))
         .catch(err => sendResponse({ success: false, error: String(err) }));
+      return true;
+    }
+
+    if (message.type === 'GET_STATUS') {
+      sendResponse({ success: true, isForYou: isForYouTab() });
       return true;
     }
 

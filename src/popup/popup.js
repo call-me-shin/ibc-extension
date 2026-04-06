@@ -465,10 +465,18 @@ async function updateStatusBar() {
 
   const banner = document.getElementById('waitingBanner');
 
-  if (!hasXTab) {
-    statusBar.innerHTML = '<span class="status-dot" style="background:#888888;animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン';
+  if (!hasXTab || !isHome) {
+    const dotColor = !hasXTab ? '#888888' : '#6060a0';
+    statusBar.innerHTML = `<span class="status-dot" style="background:${dotColor};animation:none;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;"></span>待機中 — X タイムライン`;
     if (banner) banner.style.display = 'block';
-  } else if (isHome) {
+    return;
+  }
+
+  // isHome が true の場合、おすすめタブかどうかを content script に問い合わせる
+  const statusRes = await sendToXTab({ type: 'GET_STATUS' });
+  const isForYou = statusRes && statusRes.success && statusRes.isForYou;
+
+  if (isForYou) {
     statusBar.innerHTML = '<span class="status-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 2s infinite;background:#6af7a0;"></span>チェック中 — X タイムライン';
     if (banner) banner.style.display = 'none';
   } else {

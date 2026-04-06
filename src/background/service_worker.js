@@ -73,15 +73,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'PAGE_STATUS') {
-    const isHome = message.isHome;
-    if (isHome) {
+    if (message.isHome && message.isForYou) {
       chrome.action.setBadgeText({ text: '●' });
       chrome.action.setBadgeBackgroundColor({ color: '#228833' });
       chrome.action.setTitle({ title: 'IBC – チェック中' });
     } else {
       chrome.action.setBadgeText({ text: '○' });
-      chrome.action.setBadgeBackgroundColor({ color: '#6060a0' });
-      chrome.action.setTitle({ title: 'IBC – X を開いています' });
+      chrome.action.setBadgeBackgroundColor({ color: '#888888' });
+      chrome.action.setTitle({ title: 'IBC – 待機中' });
     }
     sendResponse({ success: true });
     return false;
@@ -99,7 +98,9 @@ console.log('[IBC SW] Service Worker loaded.');
 
 // ── バッジ制御 ────────────────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.action.setBadgeBackgroundColor({ color: '#228833' });
+  chrome.action.setBadgeText({ text: '○' });
+  chrome.action.setBadgeBackgroundColor({ color: '#888888' });
+  chrome.action.setTitle({ title: 'IBC – 待機中' });
 });
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -115,16 +116,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 function updateBadge(url) {
   const isHome = url && url.includes('x.com/home');
+  const isX = url && (url.includes('x.com') || url.includes('twitter.com'));
 
-  if (isHome) {
-    chrome.action.setBadgeText({ text: '●' });
-    chrome.action.setBadgeBackgroundColor({ color: '#228833' });
-    chrome.action.setTitle({ title: 'IBC – チェック中' });
-  } else {
+  if (!isX) {
+    chrome.action.setBadgeText({ text: '○' });
+    chrome.action.setBadgeBackgroundColor({ color: '#888888' });
+    chrome.action.setTitle({ title: 'IBC – 待機中' });
+  } else if (!isHome) {
     chrome.action.setBadgeText({ text: '○' });
     chrome.action.setBadgeBackgroundColor({ color: '#888888' });
     chrome.action.setTitle({ title: 'IBC – 待機中' });
   }
+  // isHome の場合は PAGE_STATUS に任せる
 }
 
 // ── サイドパネル設定 ──────────────────────────────────────────────────────────
