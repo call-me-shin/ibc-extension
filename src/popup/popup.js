@@ -213,14 +213,7 @@ async function analyze(tweets) {
 
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
-  const totalForEntropy = [...kwFreq.values()].reduce((a, b) => a + b, 0);
-  const top10kwSum = topN(kwFreq, 10).reduce((a, [, v]) => a + v, 0);
-  const filterBubbleScore = Math.min(100, Math.round(top10kwSum / totalForEntropy * 100));
-
-  const top5authSum = topN(authFreq, 5).reduce((a, [, v]) => a + v, 0);
-  const echoChamberScore = Math.min(100, Math.round(top5authSum / tweets.length * 100));
-
-  return { topKw, topAuth, filterBubbleScore, echoChamberScore, total: tweets.length, uniqueAuthors: authFreq.size };
+  return { topKw, topAuth, total: tweets.length, uniqueAuthors: authFreq.size };
 }
 
 // ── Chart.js ─────────────────────────────────────────────────────────────────
@@ -358,41 +351,6 @@ function renderAuthorBars(topAuth, totalTweets) {
   }).join('');
 }
 
-// ── スコア表示 ────────────────────────────────────────────────────────────────
-const LEVELS = [
-  { max: 20,  label: '健全',     color: '#6af7a0' },
-  { max: 40,  label: '軽度偏向', color: '#a0f76a' },
-  { max: 60,  label: '中程度',   color: '#f7c56a' },
-  { max: 80,  label: '高偏向',   color: '#f7976a' },
-  { max: 101, label: '危険',     color: '#f76a6a' },
-];
-
-let currentFilterBubbleScore = 0;
-let currentEchoChamberScore  = 0;
-
-function showScore(score, label) {
-  const level = LEVELS.find(l => score < l.max) || LEVELS[LEVELS.length - 1];
-  const numEl = document.getElementById('scoreNum');
-  const barEl = document.getElementById('scoreBar');
-  const badgeEl = document.getElementById('scoreBadge');
-  const labelEl = document.getElementById('scoreLabel');
-  if (labelEl) labelEl.textContent = label;
-  if (numEl) { numEl.textContent = score; numEl.style.color = level.color; }
-  if (barEl) barEl.style.width = `${score}%`;
-  if (badgeEl) { badgeEl.textContent = level.label; badgeEl.style.color = level.color; }
-}
-
-function updateScoreUI(filterBubbleScore, echoChamberScore) {
-  currentFilterBubbleScore = filterBubbleScore;
-  currentEchoChamberScore  = echoChamberScore;
-  const activeTab = document.querySelector('.tab.active');
-  if (activeTab && activeTab.dataset.tab === 'authors') {
-    showScore(echoChamberScore, 'Echo Chamber');
-  } else {
-    showScore(filterBubbleScore, 'Filter Bubble');
-  }
-}
-
 // ── インラインローディング制御 ─────────────────────────────────────────────────
 function showInlineLoading(text = 'AI解析中です、少々お待ちください...') {
   const el = document.getElementById('inlineLoading');
@@ -444,7 +402,6 @@ async function runAnalysis() {
     const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
     document.getElementById('statusMeta').textContent =
       `${tweets.length}件 ・ ${result.uniqueAuthors}アカウント ・ 過去${days}日`;
-    updateScoreUI(result.filterBubbleScore, result.echoChamberScore);
     document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
     renderKeywordChart(result.topKw, result.total);
@@ -480,11 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-      if (tab.dataset.tab === 'authors') {
-        showScore(currentEchoChamberScore, 'Echo Chamber');
-      } else if (tab.dataset.tab === 'keywords') {
-        showScore(currentFilterBubbleScore, 'Filter Bubble');
-      }
     });
   });
 
