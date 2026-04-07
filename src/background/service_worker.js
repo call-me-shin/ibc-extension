@@ -78,6 +78,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ success: true });
     return false;
   }
+
 });
 
 console.log('[IBC SW] Service Worker loaded.');

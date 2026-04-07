@@ -7,6 +7,10 @@
 
 'use strict';
 
+import { getAIStatus, buildNounSet, clearNounCache, loadCache } from '../lib/ai-nlp.js';
+
+let _isAnalyzing = false;
+
 // ── X タブを探す ─────────────────────────────────────────────────────────────
 // 優先度: currentWindow の x.com タブ → 全ウィンドウの x.com タブ
 function getXTab() {
@@ -126,7 +130,7 @@ const EN_STOP = new Set([
   'said','says','told','called','call','calls','trying','tried','try',
 ]);
 
-const segmenter = new TinySegmenter();
+const segmenter = new window.TinySegmenter();
 
 function tokenize(text) {
   const cleaned = text
@@ -171,19 +175,29 @@ function topN(m, n = 10) {
   return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
 }
 
-function analyze(tweets) {
+async function analyze(tweets) {
   if (!tweets.length) return null;
-  // 各投稿をtokenizeして投稿数ベースで集計
-  const kwFreq = new Map();
+
+  const allTokensRaw = [];
+  const tweetTokens = [];
   for (const t of tweets) {
-    const tokens = new Set(removeStop(tokenize(t.text)));
-    for (const token of tokens) {
+    const tokens = removeStop(tokenize(t.text));
+    tweetTokens.push(tokens);
+    allTokensRaw.push(...tokens);
+  }
+
+  const nounSet = await buildNounSet(allTokensRaw, tweets.length);
+
+  const kwFreq = new Map();
+  for (const tokens of tweetTokens) {
+    const filtered = new Set(tokens.filter(t => nounSet.has(t)));
+    for (const token of filtered) {
       kwFreq.set(token, (kwFreq.get(token) || 0) + 1);
     }
   }
 
-  const topKw     = topN(kwFreq, 10);
-  // 投稿者ごとの出現回数とアバターURLを集計
+  const topKw = topN(kwFreq, 10);
+
   const authMap = new Map();
   for (const t of tweets) {
     const a = t.author || '不明';
@@ -199,7 +213,14 @@ function analyze(tweets) {
 
   const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
 
-  return { topKw, topAuth, total: tweets.length, uniqueAuthors: authFreq.size };
+  const totalForEntropy = [...kwFreq.values()].reduce((a, b) => a + b, 0);
+  const top10kwSum = topN(kwFreq, 10).reduce((a, [, v]) => a + v, 0);
+  const filterBubbleScore = Math.min(100, Math.round(top10kwSum / totalForEntropy * 100));
+
+  const top5authSum = topN(authFreq, 5).reduce((a, [, v]) => a + v, 0);
+  const echoChamberScore = Math.min(100, Math.round(top5authSum / tweets.length * 100));
+
+  return { topKw, topAuth, filterBubbleScore, echoChamberScore, total: tweets.length, uniqueAuthors: authFreq.size };
 }
 
 // ── Chart.js ─────────────────────────────────────────────────────────────────
@@ -337,12 +358,64 @@ function renderAuthorBars(topAuth, totalTweets) {
   }).join('');
 }
 
+// ── スコア表示 ────────────────────────────────────────────────────────────────
+const LEVELS = [
+  { max: 20,  label: '健全',     color: '#6af7a0' },
+  { max: 40,  label: '軽度偏向', color: '#a0f76a' },
+  { max: 60,  label: '中程度',   color: '#f7c56a' },
+  { max: 80,  label: '高偏向',   color: '#f7976a' },
+  { max: 101, label: '危険',     color: '#f76a6a' },
+];
+
+let currentFilterBubbleScore = 0;
+let currentEchoChamberScore  = 0;
+
+function showScore(score, label) {
+  const level = LEVELS.find(l => score < l.max) || LEVELS[LEVELS.length - 1];
+  const numEl = document.getElementById('scoreNum');
+  const barEl = document.getElementById('scoreBar');
+  const badgeEl = document.getElementById('scoreBadge');
+  const labelEl = document.getElementById('scoreLabel');
+  if (labelEl) labelEl.textContent = label;
+  if (numEl) { numEl.textContent = score; numEl.style.color = level.color; }
+  if (barEl) barEl.style.width = `${score}%`;
+  if (badgeEl) { badgeEl.textContent = level.label; badgeEl.style.color = level.color; }
+}
+
+function updateScoreUI(filterBubbleScore, echoChamberScore) {
+  currentFilterBubbleScore = filterBubbleScore;
+  currentEchoChamberScore  = echoChamberScore;
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab && activeTab.dataset.tab === 'authors') {
+    showScore(echoChamberScore, 'Echo Chamber');
+  } else {
+    showScore(filterBubbleScore, 'Filter Bubble');
+  }
+}
+
+// ── インラインローディング制御 ─────────────────────────────────────────────────
+function showInlineLoading(text = 'AI解析中です、少々お待ちください...') {
+  const el = document.getElementById('inlineLoading');
+  const textEl = document.getElementById('inlineLoadingText');
+  if (el) { el.style.display = 'flex'; }
+  if (textEl) { textEl.textContent = text; }
+  document.getElementById('btnAnalyze').disabled = true;
+  document.getElementById('btnRefresh').disabled = true;
+}
+
+function hideInlineLoading() {
+  const el = document.getElementById('inlineLoading');
+  if (el) { el.style.display = 'none'; }
+  document.getElementById('btnAnalyze').disabled = false;
+  document.getElementById('btnRefresh').disabled = false;
+}
+
 // ── メイン解析 ───────────────────────────────────────────────────────────────
 async function runAnalysis() {
-  const loading = document.getElementById('loading');
-  const empty   = document.getElementById('emptyState');
+  if (_isAnalyzing) return;
+  _isAnalyzing = true;
 
-  loading.classList.remove('hidden');
+  const empty = document.getElementById('emptyState');
   empty.style.display = 'none';
 
   try {
@@ -350,13 +423,28 @@ async function runAnalysis() {
 
     if (tweets.length === 0) {
       empty.style.display = 'block';
+      empty.querySelector('.empty-icon').textContent = '📡';
+      empty.querySelector('.empty-title').textContent = 'データがまだありません';
+      empty.querySelector('.empty-desc').innerHTML =
+        'X のタイムラインをスクロールしてください。<br>しばらくブラウジング後に再確認してください。';
       return;
     }
 
-    const result = analyze(tweets);
+    // キャッシュ確認：あれば即座に表示、なければローディング表示
+    const cached = await loadCache();
+    const cachedCount = cached?.tweetCount || 0;
+    const needsAI = !cached || Math.abs(tweets.length - cachedCount) >= 100;
+    if (needsAI) {
+      showInlineLoading('AI解析中です、少々お待ちください...');
+      await clearNounCache();
+    }
+
+    const result = await analyze(tweets);
     const oldest = Math.min(...tweets.map(t => t.savedAt));
     const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
-    document.getElementById('statusMeta').textContent = `${tweets.length}件 ・ ${result.uniqueAuthors}アカウント ・ 過去${days}日`;
+    document.getElementById('statusMeta').textContent =
+      `${tweets.length}件 ・ ${result.uniqueAuthors}アカウント ・ 過去${days}日`;
+    updateScoreUI(result.filterBubbleScore, result.echoChamberScore);
     document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
     renderKeywordChart(result.topKw, result.total);
@@ -364,14 +452,10 @@ async function runAnalysis() {
 
   } catch (e) {
     document.getElementById('statusMeta').textContent = '接続エラー';
-    const empty = document.getElementById('emptyState');
-    empty.style.display = 'block';
-    empty.querySelector('.empty-icon').textContent = '⚠️';
-    empty.querySelector('.empty-title').textContent = '接続できませんでした';
-    empty.querySelector('.empty-desc').textContent = e.message;
     console.warn('[IBC Popup]', e.message);
   } finally {
-    loading.classList.add('hidden');
+    hideInlineLoading();
+    _isAnalyzing = false;
   }
 }
 
@@ -396,6 +480,11 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+      if (tab.dataset.tab === 'authors') {
+        showScore(currentEchoChamberScore, 'Echo Chamber');
+      } else if (tab.dataset.tab === 'keywords') {
+        showScore(currentFilterBubbleScore, 'Filter Bubble');
+      }
     });
   });
 
@@ -405,8 +494,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnClear').addEventListener('click', async () => {
     if (!confirm('蓄積したデータをすべて削除しますか？\n削除後はおすすめタブをスクロールすると再収集されます。')) return;
     try {
+      await clearNounCache();
       await clearAllTweets();
-      console.log('[IBC Popup] Tweets cleared.');
+      console.log('[IBC Popup] Tweets and noun cache cleared.');
       await runAnalysis();
     } catch (e) {
       alert(`削除に失敗しました: ${e.message}`);
@@ -431,6 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.close();
   });
 
+  updateAIStatus();
   updateStatusBar();
   runAnalysis();
 
@@ -445,6 +536,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ── AI 状態表示 ───────────────────────────────────────────────────────────────
+async function updateAIStatus() {
+  const el = document.getElementById('aiStatus');
+  if (!el) return;
+  const status = await getAIStatus();
+  if (status === 'ready') {
+    el.textContent = 'AI強化: 有効';
+    el.style.color = '#6af7a0';
+  } else if (status === 'downloading') {
+    el.textContent = 'AI強化: 準備中';
+    el.style.color = '#f7c56a';
+  } else {
+    el.textContent = 'AI強化: 非対応';
+    el.style.color = '#6060a0';
+  }
+}
 
 // ── ステータスバー更新 ────────────────────────────────────────────────────────
 async function updateStatusBar() {

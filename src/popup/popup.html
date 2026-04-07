@@ -255,31 +255,15 @@
     .btn-secondary:hover { color: var(--text); background: var(--surface); }
 
     /* ── Loading ────────────────────────────────────────────── */
-    #loading {
-      position: absolute; inset: 0;
-      background: var(--bg);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      z-index: 100;
-    }
-    .spinner {
-      width: 32px; height: 32px;
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-small {
+      width: 12px; height: 12px;
       border: 2px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-text {
-      font-family: var(--font-head);
-      font-size: 11px;
-      color: var(--text-dim);
-      letter-spacing: 1px;
-    }
-    #loading.hidden { display: none; }
 
     /* ── Tab selector ──────────────────────────────────────── */
     .tabs {
@@ -311,12 +295,6 @@
   </style>
 </head>
 <body>
-  <!-- Loading overlay -->
-  <div id="loading">
-    <div class="spinner"></div>
-    <div class="loading-text">ANALYZING...</div>
-  </div>
-
   <!-- Header -->
   <div class="header">
     <div class="logo">
@@ -324,6 +302,10 @@
       <div>
         <div class="logo-text">Information Bias Checker</div>
       </div>
+    </div>
+    <div id="inlineLoading" style="display:none;align-items:center;gap:6px;font-size:10px;color:var(--text-dim);">
+      <div class="spinner-small"></div>
+      <span id="inlineLoadingText">AI解析中です、少々お待ちください...</span>
     </div>
     <div class="header-actions">
       <button class="btn-icon" id="btnRefresh" title="再解析">↺</button>
@@ -335,6 +317,7 @@
   <!-- Status -->
   <div class="status-bar">
     <span><span class="status-dot"></span>チェック中 — X タイムライン</span>
+    <span id="aiStatus" style="font-size:10px;color:#6060a0;">AI強化: 確認中</span>
     <span id="statusMeta">読み込み中...</span>
   </div>
 
@@ -390,6 +373,6 @@
 
   <script src="../lib/tinysegmenter.min.js"></script>
   <script src="../lib/chart.min.js"></script>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

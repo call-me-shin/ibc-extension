@@ -174,7 +174,7 @@
 
 <div id="loading">
   <div class="spinner"></div>
-  <div class="loading-text">ANALYZING YOUR FEED...</div>
+  <div class="loading-text" id="loadingText">AI解析中です、少々お待ちください...</div>
 </div>
 
 <div class="topbar">
@@ -244,6 +244,6 @@
 <!-- CSP 準拠：インラインスクリプトなし。外部 JS のみ参照 -->
 <script src="../lib/tinysegmenter.min.js"></script>
 <script src="../lib/chart.min.js"></script>
-<script src="dashboard.js"></script>
+<script type="module" src="dashboard.js"></script>
 </body>
 </html>

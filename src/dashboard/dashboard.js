@@ -6,6 +6,10 @@
 
 'use strict';
 
+import { buildNounSet, clearNounCache, loadCache } from '../lib/ai-nlp.js';
+
+let _isAnalyzing = false;
+
 // ── X タブを探す ─────────────────────────────────────────────────────────────
 // ダッシュボードは別タブで開くため currentWindow: true は使わず全タブから検索
 // 優先度: /home タブ → x.com の任意タブ
@@ -95,7 +99,7 @@ const EN_STOP = new Set([
   'said','says','told','called','call','calls','trying','tried','try',
 ]);
 
-const segmenter = new TinySegmenter();
+const segmenter = new window.TinySegmenter();
 
 function tokenize(text) {
   const cleaned = text
@@ -305,23 +309,53 @@ function renderPostList(keyword) {
 
 // ── メイン解析 ───────────────────────────────────────────────────────────────
 async function runAnalysis() {
+  if (_isAnalyzing) return;
+  _isAnalyzing = true;
   document.getElementById('loading').classList.remove('hidden');
+  const loadingText = document.getElementById('loadingText');
+  if (loadingText) loadingText.textContent = 'AI解析中です、少々お待ちください...';
 
   const tweets = await getRecentTweets().catch(() => []);
   allTweets = tweets;
+
+  if (loadingText) loadingText.textContent = tweets.length === 0
+    ? 'X タイムラインをスクロールしてください'
+    : 'AI解析中です、少々お待ちください...';
+
   document.getElementById('loading').classList.add('hidden');
 
   if (!tweets.length) {
     document.getElementById('dashWaitingBanner').style.display = 'block';
+    _isAnalyzing = false;
     return;
   }
   document.getElementById('dashWaitingBanner').style.display = 'none';
 
-  // 各投稿をtokenizeして投稿数ベースで集計
-  const kwFreq = new Map();
+  // キャッシュのツイート件数と比較して大幅変化があればキャッシュ破棄
+  const cached = await loadCache();
+  const cachedCount = cached?.tweetCount || 0;
+  if (Math.abs(tweets.length - cachedCount) >= 100) {
+    console.log('[IBC] tweet count changed significantly, clearing noun cache');
+    await clearNounCache();
+  }
+
+  // 全投稿のトークンを収集
+  const allTokensRaw = [];
+  const tweetTokens = [];
   for (const t of tweets) {
-    const tokens = new Set(removeStop(tokenize(t.text)));
-    for (const token of tokens) {
+    const tokens = removeStop(tokenize(t.text));
+    tweetTokens.push(tokens);
+    allTokensRaw.push(...tokens);
+  }
+
+  // ユニークトークンに対して一度だけAI品詞判定
+  const nounSet = await buildNounSet(allTokensRaw, tweets.length);
+
+  // 投稿数ベースで集計
+  const kwFreq = new Map();
+  for (const tokens of tweetTokens) {
+    const filtered = new Set(tokens.filter(t => nounSet.has(t)));
+    for (const token of filtered) {
       kwFreq.set(token, (kwFreq.get(token) || 0) + 1);
     }
   }
@@ -470,6 +504,8 @@ async function runAnalysis() {
       },
     },
   });
+
+  _isAnalyzing = false;
 }
 
 // ── イベント登録 ─────────────────────────────────────────────────────────────
@@ -478,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('keywordSelect').addEventListener('change', e => {
     renderPostList(e.target.value);
   });
+
 
   // ウィンドウサイズ変更時にチャートを再描画（サイドパネル開閉対応）
   const resizeObserver = new ResizeObserver(() => {

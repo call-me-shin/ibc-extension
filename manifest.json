@@ -49,7 +49,8 @@
     {
       "resources": [
         "src/dashboard/dashboard.html",
-        "src/dashboard/dashboard.js"
+        "src/dashboard/dashboard.js",
+        "src/lib/ai-nlp.js"
       ],
       "matches": [
         "<all_urls>"
