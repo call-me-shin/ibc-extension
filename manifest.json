@@ -29,7 +29,6 @@
         "https://twitter.com/*"
       ],
       "js": [
-        "src/lib/tinysegmenter.min.js",
         "src/content/collector.js"
       ],
       "run_at": "document_idle"
@@ -49,8 +48,7 @@
     {
       "resources": [
         "src/dashboard/dashboard.html",
-        "src/dashboard/dashboard.js",
-        "src/lib/ai-nlp.js"
+        "src/dashboard/dashboard.js"
       ],
       "matches": [
         "<all_urls>"

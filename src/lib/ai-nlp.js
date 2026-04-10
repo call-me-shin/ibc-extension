@@ -84,11 +84,12 @@ export async function getAIStatus() {
   }
 }
 
-const CHUNK_SIZE = 30;
-const MAX_TOKENS = 100;
+const CHUNK_SIZE = 20;
 
-export async function buildNounSet(allTokens, tweetCount = 0) {
-  if (!allTokens.length) return new Set();
+// tweets: { text, author, ... }[] を受け取り、名詞句の Set を返す
+// TODO: update caller — popup.js / dashboard.js は tokens ではなく tweets 配列を渡すよう変更が必要
+export async function buildNounSet(tweets) {
+  if (!tweets || !tweets.length) return new Set();
 
   // キャッシュがあれば即座に返す
   const cached = await loadCache();
@@ -97,52 +98,46 @@ export async function buildNounSet(allTokens, tweetCount = 0) {
     return new Set(cached.nouns);
   }
 
-  // 頻度集計して上位 MAX_TOKENS に絞る
-  const freq = new Map();
-  for (const t of allTokens) freq.set(t, (freq.get(t) || 0) + 1);
-  const topTokens = [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, MAX_TOKENS)
-    .map(([t]) => t);
-
   try {
     const session = await getSession();
-    if (!session) return new Set(topTokens);
+    if (!session) return new Set();
 
-    const nouns = [];
-    for (let i = 0; i < topTokens.length; i += CHUNK_SIZE) {
-      const chunk = topTokens.slice(i, i + CHUNK_SIZE);
+    const allNouns = new Set();
+
+    for (let i = 0; i < tweets.length; i += CHUNK_SIZE) {
+      const chunk = tweets.slice(i, i + CHUNK_SIZE);
+      const postsText = chunk
+        .map((t, idx) => `[${idx}] ${t.text}`)
+        .join('\n');
       const prompt =
-        'From the following word list, return only the nouns as a JSON array. ' +
-        'Include proper nouns, technical terms, and hashtags. ' +
-        'Return only the JSON array, no explanation.\n\n' +
-        JSON.stringify(chunk);
+        'Extract all noun phrases from the following social media posts. ' +
+        'Include compound nouns, proper nouns, product names, and hashtags as single units. ' +
+        'Return only a JSON array of strings, no explanation.\n\n' +
+        postsText;
+
       const raw = await session.prompt(prompt);
-      const match = raw.match(/\[[\s\S]*?\]/);
-      if (!match) {
-        nouns.push(...chunk);
-        continue;
-      }
+      // ```json フェンスを除去してからパース
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const match = stripped.match(/\[[\s\S]*\]/);
+      if (!match) continue;
       try {
         const parsed = JSON.parse(match[0]);
-        if (Array.isArray(parsed)) nouns.push(...parsed);
+        if (Array.isArray(parsed)) {
+          for (const noun of parsed) allNouns.add(noun);
+        }
       } catch {
-        nouns.push(...chunk);
+        // パース失敗時はスキップ
       }
     }
 
-    await saveCache({ nouns, tweetCount });
+    const nouns = [...allNouns];
+    await saveCache({ nouns, tweetCount: tweets.length });
     console.log('[IBC ai-nlp] noun set cached');
-    return new Set(nouns);
+    return allNouns;
 
   } catch (e) {
-    console.warn('[IBC ai-nlp] fallback:', e.message);
+    console.warn('[IBC ai-nlp] AI extraction failed:', e.message);
     _session = null;
-    return new Set(topTokens);
+    return new Set();
   }
-}
-
-export async function filterNouns(tokens) {
-  const nounSet = await buildNounSet(tokens);
-  return tokens.filter(t => nounSet.has(t));
 }

@@ -7,7 +7,6 @@
 
 'use strict';
 
-import { getAIStatus, buildNounSet, clearNounCache, loadCache } from '../lib/ai-nlp.js';
 
 let _isAnalyzing = false;
 
@@ -81,139 +80,32 @@ async function clearAllTweets() {
   }
 }
 
-// ── NLP ─────────────────────────────────────────────────────────────────────
-const JP_STOP = new Set([
-  'の','に','は','を','が','で','て','と','や','も','か','な','へ','より','から','まで','にて',
-  'において','については','について','による','によって','として','にとって','をめぐって',
-  'た','だ','です','ます','ない','ある','いる','する','れる','られる','させる','せる',
-  'てる','でる','てい','でい','ており','でいる','してい','している',
-  'し','れ','さ','も','こと','として','い','や','れる','など','なり','って','ない',
-  'この','ため','その','あの','これ','それ','あれ','よう','という','か','ね','よ','わ',
-  'でも','しかし','ただ','また','さらに','そして','なお','ところ','あと','まあ','もう',
-  'やはり','やっぱり','ちょっと','とても','すごく','かなり','なんか','なんて','けど',
-  'けれど','だから','なので','ので','のに','って','かな','かも','らしい','みたい',
-  'ほど','くらい','ぐらい','だけ','しか','ばかり','など','なんて','ってか',
-  'いう','いか','いて','いた','おり','おる','あり','あっ','なっ','なく','なる',
-  'あと','まず','特に','実は','実際','一応','一番','最も','全て','全部',
-  'もの','こと','ところ','わけ','はず','つもり','ため','通り','感じ','意味','必要',
-  'ん','て','で','に','は','を','が','の','と','も','や','か','へ','より',
-  'ー','・','…','「','」','（','）','、','。','！','？','〜','※','→','←',
-  'https','http','com','jp','rt','amp','www','co','pic','twitter','status',
-]);
-const EN_STOP = new Set([
-  'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from',
-  'this','that','is','are','was','were','be','been','have','has','had','do','does','did',
-  'will','would','could','should','may','might','can','shall','must','need',
-  'it','i','you','he','she','we','they','my','your','his','her','our','their','its',
-  'me','him','us','them','who','what','which','where','when','how','why',
-  'not','no','nor','so','if','as','up','out','about','into','than','then','there',
-  'just','also','like','get','got','all','more','now','new','good','very',
-  'know','think','make','say','see','look','want','use','find','give','tell','work',
-  'really','actually','basically','literally','definitely','absolutely',
-  'one','two','three','first','last','next','same','other','many','much','some','any',
-  'here','still','even','back','well','way','day','time','year','people',
-  'im','ive','dont','cant','wont','isnt','arent','wasnt','didnt','havent',
-  'via','re','amp','rt','cc','vs','etc',
-  'today','month','week','started','starting','start','every','always','never','often',
-  'sometimes','already','again','another','between','without','through','during','before','after',
-  'around','because','while','though','although','however','therefore',
-  'something','anything','everything','nothing','someone','anyone','everyone','those','these',
-  'made','making','take','took','taking','come','came','coming','going','gone','went',
-  'saw','seen','knew','known','thought','thinking','wanted','needed',
-  'feel','felt','feeling','show','showed','shown','keep','kept',
-  'let','put','set','run','ran',
-  'high','low','big','small','long','short','old','young','early','late','hard','easy',
-  'free','full','open','close','closed',
-  'per','ago','yet','too','each','both','few','lot','lots','enough','almost',
-  'maybe','perhaps','probably','quickly','slowly','simply',
-  'using','used','being','having',
-  'said','says','told','called','call','calls','trying','tried','try',
-]);
-
-const segmenter = new window.TinySegmenter();
-
-function tokenize(text) {
-  const cleaned = text
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/@\w+/g, '')
-    .replace(/pic\.twitter\S*/g, '')
-    .trim();
-
-  const tokens = [];
-
-  const jpText = cleaned.replace(/[a-zA-Z0-9]/g, ' ');
-  const jpTokens = segmenter.segment(jpText);
-  for (const w of jpTokens) {
-    const trimmed = w.trim();
-    if (trimmed.length >= 2) tokens.push(trimmed);
-  }
-
-  const enMatches = cleaned.match(/[a-zA-Z]{3,}/g) || [];
-  tokens.push(...enMatches.map(w => w.toLowerCase()));
-
-  const htMatches = text.match(/#[\w\u3040-\u9FFF]{2,}/g) || [];
-  tokens.push(...htMatches);
-
-  return tokens;
-}
-
-function removeStop(tokens) {
-  return tokens.filter(t => {
-    if (JP_STOP.has(t)) return false;
-    if (EN_STOP.has(t)) return false;
-    return true;
-  });
-}
-
-function freqMap(arr) {
-  const m = new Map();
-  for (const t of arr) m.set(t, (m.get(t) || 0) + 1);
-  return m;
-}
-
-function topN(m, n = 10) {
-  return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
-}
-
-async function analyze(tweets) {
-  if (!tweets.length) return null;
-
-  const allTokensRaw = [];
-  const tweetTokens = [];
-  for (const t of tweets) {
-    const tokens = removeStop(tokenize(t.text));
-    tweetTokens.push(tokens);
-    allTokensRaw.push(...tokens);
-  }
-
-  const nounSet = await buildNounSet(allTokensRaw, tweets.length);
-
-  const kwFreq = new Map();
-  for (const tokens of tweetTokens) {
-    const filtered = new Set(tokens.filter(t => nounSet.has(t)));
-    for (const token of filtered) {
-      kwFreq.set(token, (kwFreq.get(token) || 0) + 1);
-    }
-  }
-
-  const topKw = topN(kwFreq, 10);
-
+// ── ジャンル分析 ─────────────────────────────────────────────────────────────
+function analyzeGenres(tweets) {
+  const genreMap = new Map();
   const authMap = new Map();
+
   for (const t of tweets) {
+    if (t.genre) {
+      genreMap.set(t.genre, (genreMap.get(t.genre) || 0) + 1);
+    }
     const a = t.author || '不明';
     if (!authMap.has(a)) {
       authMap.set(a, { count: 0, avatar: t.avatar || '' });
     }
     authMap.get(a).count++;
   }
+
+  const topGenres = [...genreMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
   const topAuth = [...authMap.entries()]
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 10)
     .map(([author, data]) => ({ author, count: data.count, avatar: data.avatar }));
 
-  const authFreq = new Map([...authMap.entries()].map(([a, d]) => [a, d.count]));
-
-  return { topKw, topAuth, total: tweets.length, uniqueAuthors: authFreq.size };
+  return { topGenres, topAuth, total: tweets.length, uniqueAuthors: authMap.size };
 }
 
 // ── Chart.js ─────────────────────────────────────────────────────────────────
@@ -224,7 +116,7 @@ const PALETTE = [
 ];
 
 function renderKeywordChart(topKw, totalTweets) {
-  const ctx = document.getElementById('kwChart').getContext('2d');
+  const ctx = document.getElementById('genreChart').getContext('2d');
   if (kwChart) kwChart.destroy();
   const kwMaxCount = topKw.length > 0 ? topKw[0][1] : 1;
   const dataLabelPlugin = {
@@ -388,23 +280,25 @@ async function runAnalysis() {
       return;
     }
 
-    // キャッシュ確認：あれば即座に表示、なければローディング表示
-    const cached = await loadCache();
-    const cachedCount = cached?.tweetCount || 0;
-    const needsAI = !cached || Math.abs(tweets.length - cachedCount) >= 100;
-    if (needsAI) {
-      showInlineLoading('AI解析中です、少々お待ちください...');
-      await clearNounCache();
-    }
-
-    const result = await analyze(tweets);
+    const result = analyzeGenres(tweets);
     const oldest = Math.min(...tweets.map(t => t.savedAt));
     const days   = Math.max(1, Math.round((Date.now() - oldest) / 86400000));
     document.getElementById('statusMeta').textContent =
       `${tweets.length}件 ・ ${result.uniqueAuthors}アカウント ・ 過去${days}日`;
-    document.getElementById('kwCount').textContent   = `${result.topKw.length} キーワード`;
+
+    const genreTab   = document.querySelector('.tab[data-tab="genres"]');
+    const genrePanel = document.getElementById('tab-genres');
+
+    if (result.topGenres.length === 0) {
+      genreTab.style.display = 'none';
+      genrePanel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">ジャンル分析にはGemini Nanoが必要です</div>';
+    } else {
+      genreTab.style.display = '';
+      document.getElementById('genreCount').textContent = `${result.topGenres.length} ジャンル`;
+      renderKeywordChart(result.topGenres, result.total);
+    }
+
     document.getElementById('authCount').textContent = `${result.uniqueAuthors} アカウント`;
-    renderKeywordChart(result.topKw, result.total);
     renderAuthorBars(result.topAuth, result.total);
 
   } catch (e) {
@@ -446,9 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnClear').addEventListener('click', async () => {
     if (!confirm('蓄積したデータをすべて削除しますか？\n削除後はおすすめタブをスクロールすると再収集されます。')) return;
     try {
-      await clearNounCache();
       await clearAllTweets();
-      console.log('[IBC Popup] Tweets and noun cache cleared.');
+      console.log('[IBC Popup] Tweets cleared.');
       await runAnalysis();
     } catch (e) {
       alert(`削除に失敗しました: ${e.message}`);
@@ -493,7 +386,12 @@ document.addEventListener('DOMContentLoaded', () => {
 async function updateAIStatus() {
   const el = document.getElementById('aiStatus');
   if (!el) return;
-  const status = await getAIStatus();
+  let status = 'unavailable';
+  try {
+    const avail = await LanguageModel.availability();
+    if (avail === 'readily' || avail === 'available') status = 'ready';
+    else if (avail === 'downloadable' || avail === 'downloading') status = 'downloading';
+  } catch {}
   if (status === 'ready') {
     el.textContent = 'AI強化: 有効';
     el.style.color = '#6af7a0';

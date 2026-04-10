@@ -327,31 +327,34 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" data-tab="keywords">キーワード</button>
-    <button class="tab" data-tab="authors">投稿者</button>
-  </div>
-
-  <!-- Tab: Keywords -->
-  <div class="tab-panel active section" id="tab-keywords">
-    <div class="section-head">
-      <span class="section-title">話題キーワード Top 10（投稿数ベース）</span>
-      <span class="section-count" id="kwCount">—</span>
-    </div>
-    <div class="card">
-      <div style="position:relative;height:220px;">
-        <canvas id="kwChart"></canvas>
-      </div>
-    </div>
+    <button class="tab active" data-tab="authors">投稿者</button>
+    <button class="tab" data-tab="genres">ジャンル</button>
   </div>
 
   <!-- Tab: Authors -->
-  <div class="tab-panel section" id="tab-authors">
+  <div class="tab-panel active section" id="tab-authors">
     <div class="section-head">
       <span class="section-title">頻出アカウント Top 10</span>
       <span class="section-count" id="authCount">—</span>
     </div>
     <div class="card">
       <div class="bar-list" id="authorBars"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Genres -->
+  <div class="tab-panel section" id="tab-genres">
+    <div class="section-head">
+      <span class="section-title">ジャンル分布</span>
+      <span class="section-count" id="genreCount">—</span>
+    </div>
+    <div class="card">
+      <div style="position:relative;height:220px;">
+        <canvas id="genreChart"></canvas>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-dim);">
+        ※ ジャンル分類はAIによる自動判定のため、精度は約75%です。
+      </div>
     </div>
   </div>
 
@@ -371,7 +374,6 @@
     <button class="btn btn-primary" id="btnAnalyze">今すぐ解析</button>
   </div>
 
-  <script src="../lib/tinysegmenter.min.js"></script>
   <script src="../lib/chart.min.js"></script>
   <script type="module" src="popup.js"></script>
 </body>

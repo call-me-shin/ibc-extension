@@ -118,6 +118,70 @@
     return hash.toString(36);
   }
 
+  // ── ジャンル分類 ─────────────────────────────────────────────────────────────
+  const GENRES = [
+    "政治（選挙・政策・政府・議会）",
+    "経済（企業・ビジネス・市場・金融・商品価格）",
+    "社会（事件・犯罪・差別・格差・社会問題・人間ドラマ）",
+    "国際（海外ニュース・外交・他国の政治）",
+    "テクノロジー（IT・AI・ガジェット・家電・ソフトウェア・アプリ）",
+    "科学（宇宙・医療・生物・物理・化学・自然科学）",
+    "エンタメ（映画・ドラマ・アニメ・ゲーム・音楽・芸能・お笑い・漫画）",
+    "スポーツ（試合・選手・競技・スポーツニュース）",
+    "ライフスタイル（食・旅・趣味・ファッション・美容・個人の日常・DIY）",
+    "その他（上記に当てはまらないもの・短すぎて判断できないもの）"
+  ];
+
+  const GENRE_RESET_INTERVAL = 25;
+  let genreSession = null;
+  let genreSessionCount = 0;
+
+  async function getGenreSession() {
+    if (!window.LanguageModel) return null;
+    if (!genreSession || genreSessionCount >= GENRE_RESET_INTERVAL) {
+      if (genreSession) genreSession.destroy();
+      genreSession = await LanguageModel.create();
+      genreSessionCount = 0;
+    }
+    return genreSession;
+  }
+
+  async function classifyGenre(text) {
+    // 日本語・英語のみ対象
+    const hasJP = /[\u3040-\u9FFF]/.test(text);
+    const hasEN = /[a-zA-Z]{3,}/.test(text);
+    if (!hasJP && !hasEN) return null;
+
+    try {
+      const session = await getGenreSession();
+      if (!session) return null;
+
+      const result = await session.prompt(
+        `次の投稿のジャンルを以下のリストから必ず1つ選んでください。
+リスト以外のジャンルは絶対に使わないでください。
+リスト：${GENRES.join('、')}
+厳守：カッコなしのジャンル名のみ回答。説明不要。
+
+投稿：${text.slice(0, 100)}`
+      );
+      genreSessionCount++;
+      // カッコを除去してジャンル名のみ返す
+      return result.trim().replace(/（.*?）/g, '').trim();
+    } catch (e) {
+      console.warn('[IBC] Genre classification error:', e);
+      return null;
+    }
+  }
+
+  // ── 広告チェック ─────────────────────────────────────────────────────────────
+  function isAdTweet(article) {
+    const spans = [...article.querySelectorAll('span')];
+    return spans.some(s =>
+      s.textContent.trim() === 'Ad' ||
+      s.textContent.trim() === '広告'
+    );
+  }
+
   // ── DOM セレクタ ─────────────────────────────────────────────────────────────
   const SELECTORS = {
     tweetArticle: [
@@ -159,6 +223,7 @@
   }
 
   function extractTweet(article) {
+    if (isAdTweet(article)) return null;
     const textEl   = querySelector(article, SELECTORS.tweetText);
     const nameEl   = querySelector(article, SELECTORS.authorName);
     const handleEl = querySelector(article, SELECTORS.authorHandle);
@@ -185,10 +250,11 @@
   const pendingQueue = [];
   let flushTimer = null;
 
-  function enqueue(tweet) {
+  async function enqueue(tweet) {
     // メモリ上で重複チェック（DB問い合わせ不要）
     if (seenIds.has(tweet.id)) return;
     seenIds.add(tweet.id);
+    tweet.genre = await classifyGenre(tweet.text);
     pendingQueue.push(tweet);
     if (!flushTimer) {
       flushTimer = setTimeout(flush, 2000);
